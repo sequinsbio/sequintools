@@ -1,1 +1,8 @@
 /target
+example/GCA_000001405.15_GRCh38_no_alt_analysis_set.fasta
+example/GCA_000001405.15_GRCh38_no_alt_analysis_set.fasta.fai
+__pycache__
+example/genome.fa*
+example/*.fq
+example/*.fq.gz
+example/example.calibrated*
