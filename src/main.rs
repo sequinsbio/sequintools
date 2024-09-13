@@ -115,10 +115,16 @@ fn read_bed(filename: &String) -> Vec<Region> {
                         contig = bit;
                     }
                     if i == 1 {
-                        beg = bit.parse::<u64>().unwrap();
+                        beg = bit.parse::<u64>().expect(&format!(
+                            "column 1 is not a integer: {}: line={}",
+                            bit, line
+                        ));
                     }
                     if i == 2 {
-                        end = bit.parse::<u64>().unwrap();
+                        end = bit.parse::<u64>().expect(&format!(
+                            "column 2 is not an integer: {}: line={}",
+                            bit, line
+                        ));
                     }
                     if i == 3 {
                         name = bit;
