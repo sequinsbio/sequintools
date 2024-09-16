@@ -16,7 +16,7 @@ pub struct App {
 pub struct CalibrateArgs {
     /// flanking regions to omit from analysis (due to sequencing edge affects)
     #[arg(long, default_value_t = 500)]
-    flank: u64,
+    flank: i32,
 
     #[arg(short, long, default_value_t = 5678)]
     seed: u64,
@@ -67,6 +67,10 @@ enum Commands {
         /// mapping quality threshold
         #[arg(short = 'Q', long = "min-MQ", default_value_t = 0)]
         min_mapq: u8,
+
+        #[arg(short = 'f', long = "flank", default_value_t = 0)]
+        flank: i32,
+
         bed_path: String,
         bam_path: String,
     },
@@ -92,9 +96,10 @@ fn main() -> Result<()> {
         Commands::Calibrate(cmd_args) => calibrate::calibrate(cmd_args),
         Commands::Bedcov {
             min_mapq,
+            flank,
             bed_path,
             bam_path,
-        } => bedcov::bedcov(bam_path, bed_path, min_mapq),
+        } => bedcov::bedcov(bam_path, bed_path, min_mapq, flank),
     };
     Ok(())
 }

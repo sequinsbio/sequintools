@@ -1,7 +1,7 @@
 use crate::read_bed;
 use crate::CalibrateArgs;
 use crate::Region;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rand::seq::IteratorRandom;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
@@ -50,7 +50,7 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         let coverage = args.fold_coverage as f64;
 
         for region in &regions {
-            let depth = mean_depth(&mut bam, &region, args.flank);
+            let depth = mean_depth(&mut bam, &region, args.flank, 10)?.mean;
             println!(
                 "{}:{}-{} {} {}",
                 region.contig,
@@ -61,8 +61,8 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
             );
 
             let chrom = region.contig.as_str();
-            let beg = region.beg + args.flank;
-            let end = region.end - args.flank;
+            let beg = region.beg + args.flank as u64;
+            let end = region.end - args.flank as u64;
 
             bam.fetch((chrom, beg, end)).unwrap();
 
@@ -95,22 +95,85 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
     Ok(())
 }
 
+pub struct DepthResult {
+    pub histogram: Vec<(u32, u32)>,
+    pub mean: f64,
+    len: u32,
+}
+
+impl DepthResult {
+    pub fn cv(&self) -> Option<f32> {
+        match (self.std(), self.mean()) {
+            (Some(sig), Some(mu)) => Some(sig / mu),
+            _ => None,
+        }
+    }
+
+    pub fn len(&self) -> i32 {
+        self.len as i32
+    }
+
+    pub fn min(&self) -> Option<i32> {
+        self.histogram.iter().map(|x| x.1 as i32).min()
+    }
+
+    pub fn max(&self) -> Option<i32> {
+        self.histogram.iter().map(|x| x.1 as i32).max()
+    }
+
+    pub fn mean(&self) -> Option<f32> {
+        let data: Vec<i32> = self.histogram.iter().map(|x| x.1 as i32).collect();
+        let sum = data.iter().sum::<i32>() as f32;
+        let count = data.len();
+        match count {
+            positive if positive > 0 => Some(sum / count as f32),
+            _ => None,
+        }
+    }
+
+    pub fn std(&self) -> Option<f32> {
+        let data: Vec<i32> = self.histogram.iter().map(|x| x.1 as i32).collect();
+        match (self.mean(), data.len()) {
+            (Some(data_mean), count) if count > 0 => {
+                let variance = data
+                    .iter()
+                    .map(|value| {
+                        let diff = data_mean - (*value as f32);
+                        diff * diff
+                    })
+                    .sum::<f32>()
+                    / count as f32;
+                Some(variance.sqrt())
+            }
+            _ => None,
+        }
+    }
+}
+
 // Retun the mean depth of a region from a BAM file. `flank` bases are removed
-// from the start and end of the region prior to depth calculation.
-fn mean_depth(bam: &mut bam::IndexedReader, region: &Region, flank: u64) -> f64 {
-    let chrom = region.contig.as_str();
-    let beg = region.beg + flank;
-    let end = region.end - flank;
-    bam.fetch((chrom, beg, end)).unwrap();
-    let mut n: u64 = 0;
-    let mut c: u64 = 0;
+// from the start and end of the region prior to depth calculation. The region
+// must use 0-based coordinates.
+pub fn mean_depth(
+    bam: &mut bam::IndexedReader,
+    region: &Region,
+    flank: i32,
+    min_mapq: u8,
+) -> Result<DepthResult> {
+    let beg: u32 = region.beg as u32 + flank as u32;
+    let end: u32 = region.end as u32 - flank as u32;
+    bam.fetch((region.contig.as_str(), beg, end))?;
+    let mut total = 0;
+    let len = end - beg;
+
     let include_flags: u16 = 0;
-    let exclude_flags: u16 = 0;
-    let min_mapq: u8 = 10;
+    // 0xf04 3844 UNMAP,SECONDARY,QCFAIL,DUP,SUPPLEMENTARY
+    let exclude_flags: u16 = 3844;
+
+    let mut xs: HashMap<u32, u32> = std::collections::HashMap::new();
+
     for p in bam.pileup() {
-        let pileup = p.unwrap();
-        let pileup_pos = pileup.pos() as u64;
-        if pileup_pos < beg || pileup_pos > end {
+        let pileup = p.with_context(|| format!("pileup failed"))?;
+        if pileup.pos() < beg || pileup.pos() > end - 1 {
             continue;
         }
 
@@ -123,12 +186,21 @@ fn mean_depth(bam: &mut bam::IndexedReader, region: &Region, flank: u64) -> f64 
                     && flags & exclude_flags == 0
                     && record.mapq() >= min_mapq
             })
-            .count();
+            .count() as u32;
 
-        n += 1;
-        c += u64::from(depth as u64);
+        xs.insert(pileup.pos(), depth);
+        total += depth;
     }
-    c as f64 / n as f64
+    let mut hist = vec![(0, 0); len as usize];
+    for (i, pos) in (beg..end).enumerate() {
+        hist[i] = (pos, xs.get(&pos).copied().unwrap_or(0));
+    }
+    Ok(DepthResult {
+        histogram: hist,
+        mean: total as f64 / len as f64,
+        len: len,
+    })
+    // Ok(total as f64 / len as f64)
 }
 
 //  What if we use a sliding window over the region and determine the depth of
@@ -228,14 +300,14 @@ fn calibrate_regions(
         let sample_starts = window_starts(
             bam,
             sample_region,
-            args.flank,
+            args.flank as u64,
             args.window_size,
             args.min_mapq,
         );
         let rev_sample_starts: Vec<i64> = sample_starts.into_iter().rev().collect();
 
-        let region_beg = region.beg + args.flank;
-        let region_end = region.end - args.flank - args.window_size;
+        let region_beg = region.beg + args.flank as u64;
+        let region_end = region.end - args.flank as u64 - args.window_size;
         // let region_beg = region.beg;
         // let region_end = region.end - args.window_size;
 
@@ -401,12 +473,6 @@ fn choose_from(size: i64, n: i64, seed: u64) -> Result<Vec<i64>, CalibrateError>
         let msg = format!("sample size is too big, wanted {} from {}", n, size);
         Err(CalibrateError::new(msg.as_str()))
     }
-    // let mut xs = Vec::new();
-    // for _ in 0..n {
-    //     let i = (0..size).choose(&mut rng).unwrap();
-    //     xs.push(i);
-    // }
-    // Ok(xs)
 }
 
 // Return the unique set of contig names in a BED file
@@ -420,4 +486,55 @@ fn calibrated_contigs(path: &String) -> Result<HashSet<String>> {
         contigs.insert(contig);
     }
     Ok(contigs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mean_depth() {
+        let path = format!("{}/testdata/sim_R.bam", env!("CARGO_MANIFEST_DIR"));
+        let mut bam = bam::IndexedReader::from_path(&path).unwrap();
+        let result = mean_depth(
+            &mut bam,
+            &Region {
+                contig: "chr1".to_owned(),
+                beg: 99,
+                end: 199,
+                name: "region".to_owned(),
+            },
+            0,
+            0,
+        );
+        assert_eq!(result.unwrap().mean, 33.95);
+    }
+
+    #[test]
+    fn test_mean_depth_chr2() {
+        let path = format!("{}/testdata/sim_R.bam", env!("CARGO_MANIFEST_DIR"));
+        let mut bam = bam::IndexedReader::from_path(&path).unwrap();
+        let region = Region {
+            contig: "chr2".to_owned(),
+            beg: 99,
+            end: 199,
+            name: "reg2".to_owned(),
+        };
+        let result = mean_depth(&mut bam, &region, 0, 0).unwrap().mean;
+        assert_eq!(result, 35.25);
+    }
+
+    #[test]
+    fn test_mean_depth_chr2_mapq10() {
+        let path = format!("{}/testdata/sim_R.bam", env!("CARGO_MANIFEST_DIR"));
+        let mut bam = bam::IndexedReader::from_path(&path).unwrap();
+        let region = Region {
+            contig: "chr2".to_owned(),
+            beg: 99,
+            end: 199,
+            name: "reg2".to_owned(),
+        };
+        let result = mean_depth(&mut bam, &region, 0, 10).unwrap().mean;
+        assert_eq!(result, 0.0);
+    }
 }
