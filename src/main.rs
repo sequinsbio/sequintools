@@ -1,10 +1,7 @@
+use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand};
-use std::error::Error;
 use std::fmt;
-use std::fs::File;
-use std::io::{self, BufRead};
-use std::path::Path;
-use std::process::exit;
+use std::io::Read;
 
 mod bedcov;
 mod calibrate;
@@ -75,6 +72,7 @@ enum Commands {
     },
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Region {
     contig: String,
     beg: u64,
@@ -88,7 +86,7 @@ impl fmt::Display for Region {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
     let args = App::parse();
     let _ = match args.command {
         Commands::Calibrate(cmd_args) => calibrate::calibrate(cmd_args),
@@ -101,58 +99,121 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn read_bed(filename: &String) -> Vec<Region> {
-    let mut vec = Vec::new();
-    if let Ok(lines) = read_lines(filename) {
-        for line_maybe in lines {
-            if let Ok(line) = line_maybe {
-                let mut contig = "";
-                let mut beg = 0;
-                let mut end = 0;
-                let mut name = "";
-                for (i, bit) in line.split_whitespace().enumerate() {
-                    if i == 0 {
-                        contig = bit;
-                    }
-                    if i == 1 {
-                        beg = bit.parse::<u64>().expect(&format!(
-                            "column 1 is not a integer: {}: line={}",
-                            bit, line
-                        ));
-                    }
-                    if i == 2 {
-                        end = bit.parse::<u64>().expect(&format!(
-                            "column 2 is not an integer: {}: line={}",
-                            bit, line
-                        ));
-                    }
-                    if i == 3 {
-                        name = bit;
-                    }
-                }
-                let r = Region {
-                    contig: String::from(contig),
-                    beg,
-                    end,
-                    name: String::from(name),
-                };
-                vec.push(r);
-            }
+fn read_bed<R: Read>(reader: &mut R) -> Result<Vec<Region>> {
+    let mut result = Vec::new();
+    let mut contents = String::new();
+    reader.read_to_string(&mut contents)?;
+    for (i, line) in contents.lines().enumerate() {
+        let bits: Vec<&str> = line.split_whitespace().collect();
+        if bits.len() < 4 {
+            bail!(
+                "Incorrect number of columns detected, expected >= 4 found {} (line = {})",
+                bits.len(),
+                i + 1,
+            );
         }
+        let contig = bits[0];
+        let beg: u64 = bits[1].parse().with_context(|| {
+            format!(
+                "Beg column is not an integer: is {} (line = {})",
+                bits[1],
+                i + 1
+            )
+        })?;
+        let end: u64 = bits[2].parse().with_context(|| {
+            format!(
+                "End column is not an integer: is {} (line = {})",
+                bits[2],
+                i + 1
+            )
+        })?;
+        let name = bits[3];
+        result.push(Region {
+            contig: String::from(contig),
+            beg,
+            end,
+            name: String::from(name),
+        });
     }
-    vec
+    Ok(result)
 }
 
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where
-    P: AsRef<Path>,
-{
-    match File::open(&filename) {
-        Ok(file) => Ok(io::BufReader::new(file).lines()),
-        Err(err) => {
-            // Would be better to return an error than exiting
-            println!("unable to read {}: {}", filename.as_ref().display(), err);
-            exit(1);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+    use std::io::{self, Read};
+
+    #[test]
+    fn test_read_bed() {
+        let data = b"chr1\t1\t10\treg1";
+        let mut cursor = Cursor::new(data);
+        let result = read_bed(&mut cursor).unwrap();
+        assert_eq!(
+            result,
+            vec![Region {
+                contig: "chr1".to_owned(),
+                beg: 1,
+                end: 10,
+                name: "reg1".to_owned()
+            }]
+        );
+    }
+
+    #[test]
+    fn test_read_bed_multi() {
+        let mut cursor = Cursor::new(b"chr1\t1\t10\treg1\nchr2\t2\t20\treg2");
+        let result = read_bed(&mut cursor).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Region {
+                    contig: "chr1".to_owned(),
+                    beg: 1,
+                    end: 10,
+                    name: "reg1".to_owned()
+                },
+                Region {
+                    contig: "chr2".to_owned(),
+                    beg: 2,
+                    end: 20,
+                    name: "reg2".to_owned()
+                }
+            ]
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_read_bed_bad_start() {
+        let mut cursor = Cursor::new(b"chr1\txxx\t10\treg1");
+        read_bed(&mut cursor).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_read_bed_bad_end() {
+        let mut cursor = Cursor::new(b"chr1\t1\txxx\treg1");
+        read_bed(&mut cursor).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_read_bam_no_name() {
+        let mut cursor = Cursor::new(b"chr1\t1\t10");
+        read_bed(&mut cursor).unwrap();
+    }
+
+    struct ErrorReader;
+    impl Read for ErrorReader {
+        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::new(io::ErrorKind::Other, "bad read"))
         }
+    }
+    #[test]
+    fn test_read_bed_bad_reader() {
+        let mut reader = ErrorReader;
+        let result = read_bed(&mut reader);
+        assert!(result.is_err());
     }
 }

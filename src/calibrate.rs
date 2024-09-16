@@ -1,6 +1,7 @@
 use crate::read_bed;
 use crate::CalibrateArgs;
 use crate::Region;
+use anyhow::Result;
 use rand::seq::IteratorRandom;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
@@ -9,10 +10,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
+use std::fs::File;
+use std::io;
 use std::process::exit;
 use std::vec::Vec;
 
-pub fn calibrate(args: CalibrateArgs) -> Result<(), Box<dyn Error>> {
+pub fn calibrate(args: CalibrateArgs) -> Result<()> {
     let _ = match args.sample_bed {
         Some(_) => calibrate_by_sample_coverage(args),
         None => calibrate_by_standard_coverage(args),
@@ -20,11 +23,12 @@ pub fn calibrate(args: CalibrateArgs) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// fn calibrate_by_mean_sample_coverage() {}
-
-// pub fn calibrate(flank: u64, seed: u64, output: String, bed: String, path: String) {
-pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<(), Box<dyn Error>> {
-    let regions = read_bed(&args.bed);
+// calibrate sequin coverage by applying a mean target coverage to all sequin
+// regions.
+pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
+    let f = File::open(&args.bed)?;
+    let mut reader = io::BufReader::new(f);
+    let regions = read_bed(&mut reader)?;
 
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
@@ -91,6 +95,8 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<(), Box<dyn
     Ok(())
 }
 
+// Retun the mean depth of a region from a BAM file. `flank` bases are removed
+// from the start and end of the region prior to depth calculation.
 fn mean_depth(bam: &mut bam::IndexedReader, region: &Region, flank: u64) -> f64 {
     let chrom = region.contig.as_str();
     let beg = region.beg + flank;
@@ -130,11 +136,14 @@ fn mean_depth(bam: &mut bam::IndexedReader, region: &Region, flank: u64) -> f64 
 //  only if the read starts in that window. We keep both ends of a pair. How do
 //  we handle secondary/supplementry/duplicate reads? We can experiment with
 //  different window sizes to get the best replication of the sample coverage.
-fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<(), Box<dyn Error>> {
+fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     // shouldn't be calling this function if sample_bed is not provided
     let sample_bed = args.sample_bed.as_ref().unwrap();
-    let cal_contigs = calibrated_contigs(&args.bed);
-    let regions = read_bed(&args.bed);
+    let cal_contigs = calibrated_contigs(&args.bed)?;
+
+    let f = File::open(&args.bed)?;
+    let mut reader = io::BufReader::new(f);
+    let regions = read_bed(&mut reader)?;
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
         Err(err) => {
@@ -165,7 +174,9 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<(), Box<dyn Error
             let contig = target_names[i as usize];
             if cal_contigs.contains(&contig.to_string()) {
                 let mut sample_regions_map = HashMap::new();
-                let sample_regions = read_bed(&sample_bed);
+                let f = File::open(&sample_bed)?;
+                let mut reader = io::BufReader::new(f);
+                let sample_regions = read_bed(&mut reader)?;
                 for region in &sample_regions {
                     sample_regions_map.insert(&region.name, region);
                 }
@@ -399,12 +410,14 @@ fn choose_from(size: i64, n: i64, seed: u64) -> Result<Vec<i64>, CalibrateError>
 }
 
 // Return the unique set of contig names in a BED file
-fn calibrated_contigs(path: &String) -> HashSet<String> {
+fn calibrated_contigs(path: &String) -> Result<HashSet<String>> {
     let mut contigs = HashSet::new();
-    let regions = read_bed(path);
+    let f = File::open(&path)?;
+    let mut reader = io::BufReader::new(f);
+    let regions = read_bed(&mut reader)?;
     for region in &regions {
         let contig = String::from(&region.contig);
         contigs.insert(contig);
     }
-    contigs
+    Ok(contigs)
 }
