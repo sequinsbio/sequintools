@@ -28,7 +28,7 @@ jobs:
           push: always
           eventFilterForPush: push
           env:
-            CARGO_TERM_COLOR: always
+            CARGO_TERM_COLOR=always
           runCmd: |
             cargo test --all-features
             cargo fmt --all -- --check
