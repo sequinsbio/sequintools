@@ -50,7 +50,7 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         let coverage = args.fold_coverage as f64;
 
         for region in &regions {
-            let depth = mean_depth(&mut bam, &region, args.flank, 10)?.mean;
+            let depth = mean_depth(&mut bam, region, args.flank, 10)?.mean;
             println!(
                 "{}:{}-{} {} {}",
                 region.contig,
@@ -172,7 +172,7 @@ pub fn mean_depth(
     let mut xs: HashMap<u32, u32> = std::collections::HashMap::new();
 
     for p in bam.pileup() {
-        let pileup = p.with_context(|| format!("pileup failed"))?;
+        let pileup = p.with_context(|| "pileup failed".to_string())?;
         if pileup.pos() < beg || pileup.pos() > end - 1 {
             continue;
         }
@@ -198,7 +198,7 @@ pub fn mean_depth(
     Ok(DepthResult {
         histogram: hist,
         mean: total as f64 / len as f64,
-        len: len,
+        len,
     })
     // Ok(total as f64 / len as f64)
 }
@@ -226,7 +226,7 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     {
         let header = bam::Header::from_template(bam.header());
         let mut out = match &args.output {
-            Some(path) => bam::Writer::from_path(&path, &header, bam::Format::Bam).unwrap(),
+            Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam).unwrap(),
             None => bam::Writer::from_stdout(&header, bam::Format::Bam).unwrap(),
         };
 
@@ -244,25 +244,23 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
 
         for i in 0..hdr.target_count() {
             let contig = target_names[i as usize];
-            if cal_contigs.contains(&contig.to_string()) {
+            if cal_contigs.contains(contig) {
                 let mut sample_regions_map = HashMap::new();
-                let f = File::open(&sample_bed)?;
+                let f = File::open(sample_bed)?;
                 let mut reader = io::BufReader::new(f);
                 let sample_regions = read_bed(&mut reader)?;
                 for region in &sample_regions {
                     sample_regions_map.insert(&region.name, region);
                 }
                 calibrate_regions(&mut bam, &mut out, &regions, sample_regions_map, &args);
-            } else {
-                if !args.exclude_uncalibrated_reads {
-                    eprintln!("Processing reads in {}", contig);
-                    let beg = 1;
-                    let end = target_lengths[i as usize];
-                    bam.fetch((contig, beg, end)).unwrap();
-                    for r in bam.records() {
-                        let record = r.unwrap();
-                        out.write(&record).unwrap();
-                    }
+            } else if !args.exclude_uncalibrated_reads {
+                eprintln!("Processing reads in {}", contig);
+                let beg = 1;
+                let end = target_lengths[i as usize];
+                bam.fetch((contig, beg, end)).unwrap();
+                for r in bam.records() {
+                    let record = r.unwrap();
+                    out.write(&record).unwrap();
                 }
             }
         }
@@ -314,13 +312,15 @@ fn calibrate_regions(
         // This should be all reads mapped to a region
         let records = records_that_start_in_region(bam, contig, region.beg, region.end);
         let mut keep_names = HashSet::new();
-        let mut i = 0;
 
-        for window_beg in (region_beg..region_end).step_by(args.window_size as usize) {
+        for (i, window_beg) in (region_beg..region_end)
+            .step_by(args.window_size as usize)
+            .enumerate()
+        {
             let window_end = window_beg + args.window_size - 1;
 
             // We are always keeping both reads from paired-end data, so
-            // everytime we select a read to keep we are actually keeping two
+            // ever  ytime we select a read to keep we are actually keeping two
             // reads. This results in higher coverage in the calibrated sequin
             // regions compared to the sample region. I'm dividing by 2 as a
             // quick and dirty adjustment; it gives a sequin coverage that is
@@ -356,13 +356,12 @@ fn calibrate_regions(
                 let qname = String::from_utf8(record.qname().to_vec()).unwrap();
                 keep_names.insert(qname);
             }
-            i += 1;
         }
 
         for record in &records {
             let qname = String::from_utf8(record.qname().to_vec()).unwrap(); // really? there must be a better way
             if keep_names.contains(&qname) {
-                out.write(&record).unwrap();
+                out.write(record).unwrap();
             }
         }
     }
@@ -398,7 +397,7 @@ pub fn window_starts(
     let contig = &region.contig;
     let name = &region.name;
     let region_beg = region.beg + flank;
-    let region_end = region.end - flank - window_size as u64;
+    let region_end = region.end - flank - window_size;
     // let region_beg = region.beg;
     // let region_end = region.end - window_size as u64;
     let mut starts = Vec::new();
@@ -478,7 +477,7 @@ fn choose_from(size: i64, n: i64, seed: u64) -> Result<Vec<i64>, CalibrateError>
 // Return the unique set of contig names in a BED file
 fn calibrated_contigs(path: &String) -> Result<HashSet<String>> {
     let mut contigs = HashSet::new();
-    let f = File::open(&path)?;
+    let f = File::open(path)?;
     let mut reader = io::BufReader::new(f);
     let regions = read_bed(&mut reader)?;
     for region in &regions {

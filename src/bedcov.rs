@@ -13,12 +13,12 @@ pub fn bedcov(bam_path: String, bed_path: String, min_mapq: u8, flank: i32) -> R
     let regions = read_bed(&mut reader)?;
     let mut bam = bam::IndexedReader::from_path(bam_path).unwrap();
     let mut wtr = csv::Writer::from_writer(io::stdout());
-    wtr.write_record(&[
+    wtr.write_record([
         "chrom", "beg", "end", "name", "len", "min", "max", "mean", "std", "cv",
     ])?;
     for region in &regions {
         let depth_result = mean_depth(&mut bam, region, flank, min_mapq)?;
-        wtr.write_record(&[
+        wtr.write_record([
             &region.contig,
             &region.beg.to_string(),
             &region.end.to_string(),
