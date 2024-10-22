@@ -1,6 +1,10 @@
 name: 'Test and run format and lint checks.'
 on: # rebuild any PRs and main branch changes
   pull_request:
+    branches:
+      - main
+    paths:
+      - '**.rs'
   push:
     branches:
       - main
