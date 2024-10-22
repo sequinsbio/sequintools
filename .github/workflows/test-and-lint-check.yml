@@ -4,10 +4,18 @@ on: # rebuild any PRs and main branch changes
   push:
     branches:
       - main
+    paths:
+      - '**.rs'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+      pull-requests: write
     steps:
 
       - name: Checkout (GitHub)
@@ -40,9 +48,11 @@ jobs:
         with:
           script: |
             const output = '${{ steps.devcontainers.outputs.runCmdOutput }}';
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
+            if (output !== '') {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
