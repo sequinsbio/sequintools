@@ -1,4 +1,4 @@
-name: 'Test and run format and lint checks.'
+name: 'Test commit message style and content.'
 on: # rebuild any PRs and main branch changes
   pull_request:
   push:
