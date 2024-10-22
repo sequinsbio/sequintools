@@ -1,4 +1,4 @@
-# Set up development environment 
+# Set up development environment
 
 ## Install [Visual Studio Code](https://code.visualstudio.com/)
 
@@ -15,9 +15,9 @@ Add other platforms later.
 
 ### Troubleshoot
 
-  * [Permission required on Mac](https://docs.docker.com/desktop/install/mac-permission-requirements/)
+- [Permission required on Mac](https://docs.docker.com/desktop/install/mac-permission-requirements/)
 
-  * Pulling image falied, try `docker login`, [more details](https://docs.docker.com/reference/cli/docker/login/). 
+- Pulling image falied, try `docker login`, [more details](https://docs.docker.com/reference/cli/docker/login/).
 
 ### Verify the docker installation
 
