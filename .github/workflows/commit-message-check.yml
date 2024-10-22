@@ -9,6 +9,9 @@ jobs:
   check-commit-message:
     name: Check Commit Message
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      contents: read
 
     steps:
       - name: Check Conventional Commit
