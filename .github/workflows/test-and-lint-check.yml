@@ -11,7 +11,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
+      attestations: write
       contents: read
+      id-token: write
+      packages: write
       pull-requests: write
     steps:
 
