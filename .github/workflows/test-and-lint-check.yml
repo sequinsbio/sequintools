@@ -33,7 +33,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and run Dev Container task
-        id: build_run
         uses: devcontainers/ci@v0.3
         with:
           imageName: ghcr.io/sequinsbio/sequintools-devcontainer
