@@ -150,7 +150,7 @@ impl DepthResult {
     }
 }
 
-// Retun the mean depth of a region from a BAM file. `flank` bases are removed
+// Return the mean depth of a region from a BAM file. `flank` bases are removed
 // from the start and end of the region prior to depth calculation. The region
 // must use 0-based coordinates.
 pub fn mean_depth(

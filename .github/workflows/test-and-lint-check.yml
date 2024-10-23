@@ -45,18 +45,3 @@ jobs:
             cargo test --all-features
             cargo fmt --all -- --check
             cargo clippy --all --all-features --tests -- -D warnings
-
-      - name: Update pull request
-        uses: actions/github-script@v7
-        if: github.event_name == 'pull_request'
-        with:
-          script: |
-            const output = '${{ steps.devcontainers.outputs.runCmdOutput }}';
-            if (output !== '') {
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: output
-              })
-            }
