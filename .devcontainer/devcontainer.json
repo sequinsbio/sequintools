@@ -31,13 +31,17 @@
 	// ]
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// Note: We can't use this hear as it installs as root and breaks cargo.
-	// "features": {
-	// 	"ghcr.io/lee-orr/rusty-dev-containers/cargo-llvm-cov:0": {}
+	"features": {
+		"ghcr.io/devcontainers-contrib/features/pre-commit:2": {
+			"version": "latest"
+		}
+	},
 	// },
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 	// Use 'postCreateCommand' to run commands after the container is created.
 	"postCreateCommand": "cargo install cargo-llvm-cov",
+	"postAttachCommand": "pre-commit install --install-hooks",
 	// Configure tool-specific properties.
 	// "customizations": {},
 	"containerUser": "vscode"
