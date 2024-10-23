@@ -33,6 +33,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and run Dev Container task
+        id: build_run
         uses: devcontainers/ci@v0.3
         with:
           imageName: ghcr.io/sequinsbio/sequintools-devcontainer
@@ -51,7 +52,7 @@ jobs:
         if: github.event_name == 'pull_request'
         with:
           script: |
-            const output = '${{ steps.devcontainers.outputs.runCmdOutput }}';
+            const output = '${{ steps.build_run.outputs.runCmdOutput }}';
             if (output !== '') {
               github.rest.issues.createComment({
                 issue_number: context.issue.number,
