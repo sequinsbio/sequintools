@@ -19,13 +19,10 @@ COPY ./src ./src
 
 RUN cargo build --release
 
-# Stage 2: Create final Docker image
+# Stage 2: Create final Docker image with debain-slim.
 FROM ghcr.io/linuxcontainers/debian-slim:latest
 
 # Copy app and test data.
 COPY --from=builder /usr/sequins/target/release/sequintools /usr/local/bin/sequintools
-
-COPY ./example /usr/local/example
-COPY ./testdata /usr/local/testdata
 
 CMD [ "sequintools" ]
