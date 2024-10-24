@@ -1,3 +1,7 @@
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -6,3 +10,14 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
+        args:
+          [
+            --contrib=contrib-title-conventional-commits,
+            --ignore=ignore-merge-commits,
+            --msg-filename,
+          ]
+        stages: [commit-msg]
