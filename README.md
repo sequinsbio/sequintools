@@ -22,15 +22,15 @@ $ cargo binstall sequintools
 
 ## Docker
 
-We also provide `sequintools` as a Docker container
+We also provide `sequintools` as a [Docker container](https://github.com/orgs/sequinsbio/packages/container/package/sequintools).
 
-**(currently, this isn't available)**
+This command line below is used to fetch its latest version.
 
 ```sh
 docker pull ghcr.io/sequinsbio/sequintools:latest
 ```
 
-As an example, you could run the calibration step as
+As an example, you could run the calibration step as below, make sure the example folder is under you current path.
 
 ```sh
 docker run --rm -v $PWD:/data ghcr.io/sequinsbio/sequintools \
@@ -56,7 +56,7 @@ $ cargo build --release
 $ sudo cp target/release/sequintools /usr/local/bin
 ```
 
-## Usage 
+## Usage
 
 To get going, we provide some example data in the `example` directory. This is
 simulated data that will allow you to quickly run commands from `sequintools`
