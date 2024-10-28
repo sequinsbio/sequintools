@@ -8,7 +8,7 @@ use std::io;
 // For each region in `bed_path`, calculate the mean depth. This should be using
 // the mean_depth function in calibrate.
 pub fn bedcov(bam_path: String, bed_path: String, min_mapq: u8, flank: i32) -> Result<()> {
-    let f = File::open(&bed_path)?;
+    let f = File::open(bed_path)?;
     let mut reader = io::BufReader::new(f);
     let regions = read_bed(&mut reader)?;
     let mut bam = bam::IndexedReader::from_path(bam_path).unwrap();
