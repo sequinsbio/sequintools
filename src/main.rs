@@ -92,14 +92,14 @@ impl fmt::Display for Region {
 
 fn main() -> Result<()> {
     let args = App::parse();
-    let _ = match args.command {
-        Commands::Calibrate(cmd_args) => calibrate::calibrate(cmd_args),
+    match args.command {
+        Commands::Calibrate(cmd_args) => calibrate::calibrate(cmd_args)?,
         Commands::Bedcov {
             min_mapq,
             flank,
             bed_path,
             bam_path,
-        } => bedcov::bedcov(bam_path, bed_path, min_mapq, flank),
+        } => bedcov::bedcov(bam_path, bed_path, min_mapq, flank)?,
     };
     Ok(())
 }
