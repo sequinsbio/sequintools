@@ -1,0 +1,66 @@
+name: Build and push docker image
+
+on:
+  push:
+    branches: [ "main" ]
+    paths: [
+      "src/**",
+      "Dockerfile"
+    ]
+    tags: [ "v*" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up docker buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/sequinsbio/sequintools
+            sequinsbio.azurecr.io/sequintools
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{raw}}
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to AzureCR
+        uses: docker/login-action@v3
+        with:
+          registry: sequinsbio.azurecr.io
+          username: ${{ secrets.AZ_CONTAINER_USERNAME }}
+          password: ${{ secrets.AZ_CONTAINER_PASSWORD }}
+
+      - name: Build container
+        uses: docker/build-push-action@v6
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: backend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.output.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
