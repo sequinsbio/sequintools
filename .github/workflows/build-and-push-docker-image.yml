@@ -5,7 +5,8 @@ on:
     branches: [ "main" ]
     paths: [
       "src/**",
-      "Dockerfile"
+      "Dockerfile",
+      ".github/workflows/build-and-push-docker-image.yml"
     ]
     tags: [ "v*" ]
 
