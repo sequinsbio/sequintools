@@ -5,7 +5,8 @@ on:
     branches: [ "main" ]
     paths: [
       "src/**",
-      "Dockerfile"
+      "Dockerfile",
+      ".github/workflows/build-and-push-docker-image.yml"
     ]
     tags: [ "v*" ]
 
@@ -58,7 +59,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           platforms: linux/amd64,linux/arm64
-          context: backend
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.output.labels }}
