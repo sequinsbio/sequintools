@@ -5,11 +5,15 @@ on: # rebuild any PRs and main branch changes
       - main
     paths:
       - '**.rs'
+      - 'Cargo.toml'
+      - '.devcontainer/**'
   push:
     branches:
       - main
     paths:
       - '**.rs'
+      - 'Cargo.toml'
+      - '.devcontainer/**'
 
 jobs:
   build:
