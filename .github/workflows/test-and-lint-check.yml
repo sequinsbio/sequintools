@@ -43,9 +43,12 @@ jobs:
           cacheFrom: ghcr.io/sequinsbio/sequintools-devcontainer
           push: always
           eventFilterForPush: push
-          env:
+          env: |
             CARGO_TERM_COLOR=always
+            CODECOV_TOKEN=${{ secrets.CODECOV_TOKEN }}
+            RUN_ID=${{ github.run_id}}
           runCmd: |
-            cargo test --all-features
+            cargo tarpaulan --all-features --out xml
+            codecovcli --verbose upload-process -t $CODECOV_TOKEN -n 'job-name'-$RUN_ID -f cobertura.xml
             cargo fmt --all -- --check
             cargo clippy --all --all-features --tests -- -D warnings
