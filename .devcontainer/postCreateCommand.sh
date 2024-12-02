@@ -10,4 +10,4 @@ pip install --upgrade pip
 pip install --user -r ./.devcontainer/requirements.txt
 
 # Install container dependencies.
-cargo install cargo-tarpaulin cargo-llvm-cov
+cargo install cargo-tarpaulin@0.31.3
