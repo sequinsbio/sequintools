@@ -48,7 +48,7 @@ jobs:
             CODECOV_TOKEN=${{ secrets.CODECOV_TOKEN }}
             RUN_ID=${{ github.run_id}}
           runCmd: |
-            cargo tarpaulan --all-features --out xml
+            cargo tarpaulin --all-features --out xml
             codecovcli --verbose upload-process -t $CODECOV_TOKEN -n 'job-name'-$RUN_ID -f cobertura.xml
             cargo fmt --all -- --check
             cargo clippy --all --all-features --tests -- -D warnings
