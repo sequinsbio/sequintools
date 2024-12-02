@@ -87,9 +87,8 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         }
     }
     if args.write_index {
-        match &args.output {
-            Some(path) => bam::index::build(path, None, bam::index::Type::Bai, 1).unwrap(),
-            None => (), //
+        if let Some(path) = &args.output {
+            bam::index::build(path, None, bam::index::Type::Bai, 1).unwrap();
         }
     }
     Ok(())
@@ -266,12 +265,9 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
         }
     }
     if args.write_index {
-        match &args.output {
-            Some(path) => {
-                eprintln!("Writing index");
-                bam::index::build(path, None, bam::index::Type::Bai, 1).unwrap();
-            }
-            None => (), // can't index stdout
+        if let Some(path) = &args.output {
+            eprintln!("Writing index");
+            bam::index::build(path, None, bam::index::Type::Bai, 1).unwrap();
         }
     }
     Ok(())
