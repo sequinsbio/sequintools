@@ -7,6 +7,7 @@ mod bedcov;
 mod calibrate;
 
 #[derive(Parser, Debug)]
+#[clap(version)]
 pub struct App {
     #[command(subcommand)]
     command: Commands,
