@@ -487,10 +487,11 @@ fn calibrated_contigs(path: &String) -> Result<HashSet<String>> {
 mod tests {
     use super::*;
 
+    const TEST_BAM_PATH: &str = "testdata/sim_R.bam";
+
     #[test]
     fn test_mean_depth() {
-        let path = format!("{}/testdata/sim_R.bam", env!("CARGO_MANIFEST_DIR"));
-        let mut bam = bam::IndexedReader::from_path(&path).unwrap();
+        let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
         let result = mean_depth(
             &mut bam,
             &Region {
@@ -507,8 +508,7 @@ mod tests {
 
     #[test]
     fn test_mean_depth_chr2() {
-        let path = format!("{}/testdata/sim_R.bam", env!("CARGO_MANIFEST_DIR"));
-        let mut bam = bam::IndexedReader::from_path(&path).unwrap();
+        let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
         let region = Region {
             contig: "chr2".to_owned(),
             beg: 99,
@@ -521,8 +521,7 @@ mod tests {
 
     #[test]
     fn test_mean_depth_chr2_mapq10() {
-        let path = format!("{}/testdata/sim_R.bam", env!("CARGO_MANIFEST_DIR"));
-        let mut bam = bam::IndexedReader::from_path(&path).unwrap();
+        let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
         let region = Region {
             contig: "chr2".to_owned(),
             beg: 99,
