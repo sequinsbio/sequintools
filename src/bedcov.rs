@@ -7,7 +7,7 @@ use std::io::{self, Write};
 
 /// Generates a coverage report for genomic regions specified in a BED file.
 ///
-/// It should calculate the mean depth via `mean_depth`` function in calibrate.
+/// It should calculate the mean depth via `mean_depth` function in calibrate.
 ///
 /// This function calculates and writes coverage statistics for each region in a BED file,
 /// including minimum, maximum, mean depth, standard deviation, and coefficient of variation.
@@ -18,12 +18,12 @@ use std::io::{self, Write};
 /// * `bed_path` - Path to the BED file containing regions of interest
 /// * `min_mapq` - Minimum mapping quality threshold for reads to be considered
 /// * `flank` - Number of base pairs to extend regions on both sides
-/// * `dest` - A writer implementing the `Write` trait where the report will be written
+/// * `dest` - A writer implementing the `Write` trait where the report will be output
 ///
 /// # Returns
 ///
 /// Returns `Result<()>` which is:
-/// * `Ok(())` if the report was successfully generated and written
+/// * `Ok(())` if the report was successfully generated and output to the writer
 /// * `Err(e)` if there was an error reading the files or writing the report
 ///
 /// # Format
