@@ -91,20 +91,6 @@ impl fmt::Display for Region {
     }
 }
 
-fn main() -> Result<()> {
-    let args = App::parse();
-    match args.command {
-        Commands::Calibrate(cmd_args) => calibrate::calibrate(cmd_args)?,
-        Commands::Bedcov {
-            min_mapq,
-            flank,
-            bed_path,
-            bam_path,
-        } => bedcov::bedcov(bam_path, bed_path, min_mapq, flank)?,
-    };
-    Ok(())
-}
-
 fn read_bed<R: Read>(reader: &mut R) -> Result<Vec<Region>> {
     let mut result = Vec::new();
     let mut contents = String::new();
@@ -144,11 +130,44 @@ fn read_bed<R: Read>(reader: &mut R) -> Result<Vec<Region>> {
     Ok(result)
 }
 
+fn main() -> Result<()> {
+    let args = App::parse();
+    match args.command {
+        Commands::Calibrate(cmd_args) => calibrate::calibrate(cmd_args)?,
+        Commands::Bedcov {
+            min_mapq,
+            flank,
+            bed_path,
+            bam_path,
+        } => bedcov::bedcov(bam_path, bed_path, min_mapq, flank)?,
+    };
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Cursor;
     use std::io::{self, Read};
+
+    #[test]
+    fn test_region_display() {
+        let region = Region {
+            contig: "chr1".to_owned(),
+            beg: 100,
+            end: 200,
+            name: "test_region".to_owned(),
+        };
+        assert_eq!(region.to_string(), "chr1:100-200");
+
+        let region2 = Region {
+            contig: "chrX".to_owned(),
+            beg: 0,
+            end: 1000,
+            name: "test_region2".to_owned(),
+        };
+        assert_eq!(region2.to_string(), "chrX:0-1000");
+    }
 
     #[test]
     fn test_read_bed() {
@@ -190,24 +209,33 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_read_bed_bad_start() {
         let mut cursor = Cursor::new(b"chr1\txxx\t10\treg1");
-        read_bed(&mut cursor).unwrap();
+        let err = read_bed(&mut cursor).unwrap_err();
+        // check that the error message is correct
+        assert!(err
+            .to_string()
+            .contains("Beg column is not an integer: is xxx (line = 1)"));
     }
 
     #[test]
-    #[should_panic]
     fn test_read_bed_bad_end() {
         let mut cursor = Cursor::new(b"chr1\t1\txxx\treg1");
-        read_bed(&mut cursor).unwrap();
+        let err = read_bed(&mut cursor).unwrap_err();
+        // check that the error message is correct
+        assert!(err
+            .to_string()
+            .contains("End column is not an integer: is xxx (line = 1)"));
     }
 
     #[test]
-    #[should_panic]
     fn test_read_bam_no_name() {
         let mut cursor = Cursor::new(b"chr1\t1\t10");
-        read_bed(&mut cursor).unwrap();
+        let err = read_bed(&mut cursor).unwrap_err();
+        // check that the error message is correct
+        assert!(err
+            .to_string()
+            .contains("Incorrect number of columns detected, expected >= 4 found 3"));
     }
 
     struct ErrorReader;
