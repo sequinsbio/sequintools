@@ -139,7 +139,7 @@ fn main() -> Result<()> {
             flank,
             bed_path,
             bam_path,
-        } => bedcov::bedcov(bam_path, bed_path, min_mapq, flank)?,
+        } => bedcov::bedcov(&bam_path, &bed_path, min_mapq, flank)?,
     };
     Ok(())
 }
