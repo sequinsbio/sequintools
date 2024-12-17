@@ -40,8 +40,8 @@ use std::io::{self, Write};
 /// * std - standard deviation
 /// * cv - coefficient of variation
 fn bedcov_report<W: Write>(
-    bam_path: String,
-    bed_path: String,
+    bam_path: &str,
+    bed_path: &str,
     min_mapq: u8,
     flank: i32,
     dest: W,
@@ -88,7 +88,7 @@ fn bedcov_report<W: Write>(
 /// Returns `Result<()>` which is:
 /// * `Ok(())` if the report was successfully generated and written to stdout
 /// * `Err(e)` if there was an error reading the files or writing the report
-pub fn bedcov(bam_path: String, bed_path: String, min_mapq: u8, flank: i32) -> Result<()> {
+pub fn bedcov(bam_path: &str, bed_path: &str, min_mapq: u8, flank: i32) -> Result<()> {
     bedcov_report(bam_path, bed_path, min_mapq, flank, io::stdout())
 }
 
@@ -113,7 +113,9 @@ mod tests {
     #[test]
     fn test_bedcov_report() {
         let mut buffer = Vec::new();
-        let result = bedcov_report(test_path("bam"), test_path("bed"), 0, 0, &mut buffer);
+        let bam_path = &test_path("bam");
+        let bed_path = &test_path("bed");
+        let result = bedcov_report(bam_path, bed_path, 0, 0, &mut buffer);
         assert!(result.is_ok());
 
         // Compare the report with the expected
@@ -125,25 +127,23 @@ mod tests {
 
     #[test]
     fn test_bedcov() {
-        let result = bedcov(test_path("bam"), test_path("bed"), 0, 0);
+        let bam_path = &test_path("bam");
+        let bed_path = &test_path("bed");
+        let result = bedcov(bam_path, bed_path, 0, 0);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_bedcov_with_wrong_bam_path() {
-        let bam_path = "invalid.bam";
-        let test_bed_path = format!("{}/testdata/test.bed", env!("CARGO_MANIFEST_DIR"));
-
-        let result = bedcov(bam_path.to_string(), test_bed_path.to_string(), 30, 0);
+        let bed_path = &test_path("bed");
+        let result = bedcov("wrong_path.bam", bed_path, 30, 0);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_bedcov_with_invalid_bed_path() {
-        let test_bam_path = format!("{}/testdata/sim_R.bam", env!("CARGO_MANIFEST_DIR"));
-        let bed_path = "invalid.bed";
-
-        let result = bedcov(test_bam_path.to_string(), bed_path.to_string(), 30, 0);
+        let bam_path = &test_path("bam");
+        let result = bedcov(bam_path, "wrong_path.bed", 30, 0);
         assert!(result.is_err());
     }
 }
