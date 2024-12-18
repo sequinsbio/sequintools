@@ -470,7 +470,7 @@ fn choose_from(size: i64, n: i64, seed: u64) -> Result<Vec<i64>, CalibrateError>
 }
 
 // Return the unique set of contig names in a BED file
-fn calibrated_contigs(path: &String) -> Result<HashSet<String>> {
+fn calibrated_contigs(path: &str) -> Result<HashSet<String>> {
     let mut contigs = HashSet::new();
     let f = File::open(path)?;
     let mut reader = io::BufReader::new(f);
@@ -499,6 +499,48 @@ mod tests {
     use super::*;
 
     const TEST_BAM_PATH: &str = "testdata/sim_R.bam";
+    const TEST_BED_PATH: &str = "testdata/region_test.bed";
+
+    #[test]
+    fn test_window_starts() {
+        let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
+        let region = Region {
+            contig: "chr1".to_owned(),
+            beg: 99,
+            end: 199,
+            name: "region".to_owned(),
+        };
+        let starts = window_starts(&mut bam, &region, 0, 50, 0);
+        assert_eq!(starts.len(), 1);
+    }
+
+    #[test]
+    fn test_window_starts_with_mapq() {
+        let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
+        let region = Region {
+            contig: "chr2".to_owned(),
+            beg: 99,
+            end: 199,
+            name: "reg2".to_owned(),
+        };
+        let starts = window_starts(&mut bam, &region, 0, 50, 10);
+        assert_eq!(starts.iter().sum::<i64>(), 0);
+    }
+
+    #[test]
+    fn test_records_that_start_in_region() {
+        let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
+        let records = records_that_start_in_region(&mut bam, "chr3", 99, 199);
+        assert_eq!(records.len(), 36);
+    }
+
+    #[test]
+    fn test_calibrated_contigs() {
+        let contigs = calibrated_contigs(TEST_BED_PATH).unwrap();
+        assert!(contigs.contains("chr1"));
+        assert!(contigs.contains("chr2"));
+        assert_eq!(contigs.len(), 2);
+    }
 
     #[test]
     fn test_mean_depth() {

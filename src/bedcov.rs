@@ -177,7 +177,7 @@ mod tests {
     fn get_test_path(key: &str) -> String {
         let file = match key {
             "bam" => "sim_R.bam",
-            "bed" => "test.bed",
+            "bed" => "region_test.bed",
             _ => panic!("Unknown test file key: {}", key),
         };
         format!("{}/testdata/{}", env!("CARGO_MANIFEST_DIR"), file)
