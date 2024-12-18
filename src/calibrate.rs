@@ -1,6 +1,5 @@
-use crate::read_bed;
+use crate::region::{load_from_bed, Region};
 use crate::CalibrateArgs;
-use crate::Region;
 use anyhow::{Context, Result};
 use rand::seq::IteratorRandom;
 use rand::{Rng, SeedableRng};
@@ -28,7 +27,7 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
 pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
     let f = File::open(&args.bed)?;
     let mut reader = io::BufReader::new(f);
-    let regions = read_bed(&mut reader)?;
+    let regions = load_from_bed(&mut reader)?;
 
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
@@ -214,7 +213,7 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
 
     let f = File::open(&args.bed)?;
     let mut reader = io::BufReader::new(f);
-    let regions = read_bed(&mut reader)?;
+    let regions = load_from_bed(&mut reader)?;
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
         Err(err) => {
@@ -247,7 +246,7 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
                 let mut sample_regions_map = HashMap::new();
                 let f = File::open(sample_bed)?;
                 let mut reader = io::BufReader::new(f);
-                let sample_regions = read_bed(&mut reader)?;
+                let sample_regions = load_from_bed(&mut reader)?;
                 for region in &sample_regions {
                     sample_regions_map.insert(&region.name, region);
                 }
@@ -475,7 +474,7 @@ fn calibrated_contigs(path: &String) -> Result<HashSet<String>> {
     let mut contigs = HashSet::new();
     let f = File::open(path)?;
     let mut reader = io::BufReader::new(f);
-    let regions = read_bed(&mut reader)?;
+    let regions = load_from_bed(&mut reader)?;
     for region in &regions {
         let contig = String::from(&region.contig);
         contigs.insert(contig);

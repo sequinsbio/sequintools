@@ -1,5 +1,6 @@
 use crate::calibrate::mean_depth;
-use crate::read_bed;
+use crate::region::{load_from_bed, Region};
+use crate::BedcovArgs;
 use anyhow::Result;
 use rust_htslib::bam;
 use std::fs::File;
@@ -47,7 +48,7 @@ fn bedcov_report<W: Write>(
     dest: W,
 ) -> Result<()> {
     let mut bam = bam::IndexedReader::from_path(bam_path)?;
-    let regions: Vec<crate::Region> = read_bed(&mut io::BufReader::new(File::open(bed_path)?))?;
+    let regions: Vec<Region> = load_from_bed(&mut io::BufReader::new(File::open(bed_path)?))?;
 
     let mut wtr = csv::Writer::from_writer(dest);
     wtr.write_record([
@@ -88,8 +89,14 @@ fn bedcov_report<W: Write>(
 /// Returns `Result<()>` which is:
 /// * `Ok(())` if the report was successfully generated and written to stdout
 /// * `Err(e)` if there was an error reading the files or writing the report
-pub fn bedcov(bam_path: &str, bed_path: &str, min_mapq: u8, flank: i32) -> Result<()> {
-    bedcov_report(bam_path, bed_path, min_mapq, flank, io::stdout())
+pub fn bedcov(args: BedcovArgs) -> Result<()> {
+    bedcov_report(
+        &args.bam_path,
+        &args.bed_path,
+        args.min_mapq,
+        args.flank,
+        io::stdout(),
+    )
 }
 
 #[cfg(test)]
@@ -127,23 +134,38 @@ mod tests {
 
     #[test]
     fn test_bedcov() {
-        let bam_path = &test_path("bam");
-        let bed_path = &test_path("bed");
-        let result = bedcov(bam_path, bed_path, 0, 0);
+        // BedcovArgs for testing
+        let args = BedcovArgs {
+            bam_path: test_path("bam"),
+            bed_path: test_path("bed"),
+            min_mapq: 0,
+            flank: 0,
+        };
+        let result = bedcov(args);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_bedcov_with_wrong_bam_path() {
-        let bed_path = &test_path("bed");
-        let result = bedcov("wrong_path.bam", bed_path, 30, 0);
+        let args = BedcovArgs {
+            bam_path: "wrong_path.bam".to_owned(),
+            bed_path: test_path("bed"),
+            min_mapq: 0,
+            flank: 0,
+        };
+        let result = bedcov(args);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_bedcov_with_invalid_bed_path() {
-        let bam_path = &test_path("bam");
-        let result = bedcov(bam_path, "wrong_path.bed", 30, 0);
+        let args = BedcovArgs {
+            bam_path: test_path("bam"),
+            bed_path: "wrong_path.bam".to_owned(),
+            min_mapq: 0,
+            flank: 0,
+        };
+        let result = bedcov(args);
         assert!(result.is_err());
     }
 }
