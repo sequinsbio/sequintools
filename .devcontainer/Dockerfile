@@ -1,8 +1,8 @@
 
 FROM mcr.microsoft.com/devcontainers/python:3.12-bookworm
 
-RUN apt update \
-  && apt install -y --no-install-recommends \
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
   cmake \
   clang \
   curl \
@@ -16,10 +16,7 @@ WORKDIR /code
 
 COPY ./requirements.txt /code/requirements.txt
 
-RUN pip install --upgrade pip
-
-# Required to do manual pushes to codecov from inside our container.
-RUN pip install --user -r /code/requirements.txt
+RUN pip install --no-cache-dir -r /code/requirements.txt
 
 # Install rust as user vscode to avoid caching directory write issues when
 # running the cargo commands.
