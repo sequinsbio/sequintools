@@ -1,5 +1,6 @@
 use crate::calibrate::mean_depth;
-use crate::read_bed;
+use crate::region::{load_from_bed, Region};
+use crate::BedcovArgs;
 use anyhow::Result;
 use rust_htslib::bam;
 use std::fs::File;
@@ -29,16 +30,16 @@ use std::io::{self, Write};
 /// # Format
 ///
 /// The output is a CSV file with the following columns:
-/// * chrom - chromosome name
-/// * beg - start position
-/// * end - end position
-/// * name - region name
-/// * len - region length
-/// * min - minimum depth
-/// * max - maximum depth
-/// * mean - mean depth
-/// * std - standard deviation
-/// * cv - coefficient of variation
+/// * `chrom` - Chromosome name.
+/// * `beg` - Start position of the region.
+/// * `end` - End position of the region.
+/// * `name` - Name of the region.
+/// * `len` - Length of the region.
+/// * `min` - Minimum depth within the region.
+/// * `max` - Maximum depth within the region.
+/// * `mean` - Mean depth across the region.
+/// * `std` - Standard deviation of the depth.
+/// * `cv` - Coefficient of variation of the depth.
 fn bedcov_report<W: Write>(
     bam_path: &str,
     bed_path: &str,
@@ -47,7 +48,7 @@ fn bedcov_report<W: Write>(
     dest: W,
 ) -> Result<()> {
     let mut bam = bam::IndexedReader::from_path(bam_path)?;
-    let regions: Vec<crate::Region> = read_bed(&mut io::BufReader::new(File::open(bed_path)?))?;
+    let regions: Vec<Region> = load_from_bed(&mut io::BufReader::new(File::open(bed_path)?))?;
 
     let mut wtr = csv::Writer::from_writer(dest);
     wtr.write_record([
@@ -72,24 +73,34 @@ fn bedcov_report<W: Write>(
     Ok(())
 }
 
-/// Convenience function to generate a coverage report and write it to stdout
+/// Generates a coverage report for genomic regions and outputs it to the standard output.
 ///
-/// This is a wrapper around `bedcov_report` that writes the output to standard output.
+/// This is a convenient wrapper around the `bedcov_report` function. It takes the necessary
+/// parameters to generate the coverage report and writes the resulting CSV directly to
+/// the standard output (stdout).
 ///
 /// # Arguments
 ///
-/// * `bam_path` - Path to the BAM file containing aligned reads
-/// * `bed_path` - Path to the BED file containing regions of interest
-/// * `min_mapq` - Minimum mapping quality threshold for reads to be considered
-/// * `flank` - Number of base pairs to extend regions on both sides
+/// * `args` - A `BedcovArgs` struct wrapping args from commandline, which containing:
+///     * `bam_path` - Path to the BAM file with aligned reads.
+///     * `bed_path` - Path to the BED file with regions of interest.
+///     * `min_mapq` - Minimum mapping quality score for reads to be included.
+///     * `flank` - Number of base pairs to extend each region on both sides.
 ///
 /// # Returns
 ///
-/// Returns `Result<()>` which is:
-/// * `Ok(())` if the report was successfully generated and written to stdout
-/// * `Err(e)` if there was an error reading the files or writing the report
-pub fn bedcov(bam_path: &str, bed_path: &str, min_mapq: u8, flank: i32) -> Result<()> {
-    bedcov_report(bam_path, bed_path, min_mapq, flank, io::stdout())
+/// A `Result<()>` indicating the success or failure of the report generation:
+///
+/// * `Ok(())` - The report was successfully generated and written to stdout.
+/// * `Err(e)` - An error occurred during file processing or output operations.
+pub fn bedcov(args: BedcovArgs) -> Result<()> {
+    bedcov_report(
+        &args.bam_path,
+        &args.bed_path,
+        args.min_mapq,
+        args.flank,
+        io::stdout(),
+    )
 }
 
 #[cfg(test)]
@@ -127,23 +138,38 @@ mod tests {
 
     #[test]
     fn test_bedcov() {
-        let bam_path = &test_path("bam");
-        let bed_path = &test_path("bed");
-        let result = bedcov(bam_path, bed_path, 0, 0);
+        // BedcovArgs for testing
+        let args = BedcovArgs {
+            bam_path: test_path("bam"),
+            bed_path: test_path("bed"),
+            min_mapq: 0,
+            flank: 0,
+        };
+        let result = bedcov(args);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_bedcov_with_wrong_bam_path() {
-        let bed_path = &test_path("bed");
-        let result = bedcov("wrong_path.bam", bed_path, 30, 0);
+        let args = BedcovArgs {
+            bam_path: "wrong_path.bam".to_owned(),
+            bed_path: test_path("bed"),
+            min_mapq: 0,
+            flank: 0,
+        };
+        let result = bedcov(args);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_bedcov_with_invalid_bed_path() {
-        let bam_path = &test_path("bam");
-        let result = bedcov(bam_path, "wrong_path.bed", 30, 0);
+        let args = BedcovArgs {
+            bam_path: test_path("bam"),
+            bed_path: "wrong_path.bam".to_owned(),
+            min_mapq: 0,
+            flank: 0,
+        };
+        let result = bedcov(args);
         assert!(result.is_err());
     }
 }
