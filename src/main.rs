@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "More mocks required"]
+    #[ignore = "TODO: add required mocks."]
     fn test_main_calibrate_execution() {
         // Here you would typically mock the calibrate::calibrate function
         // and assert it was called with the correct arguments.
@@ -236,7 +236,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "More mocks required"]
+    #[ignore = "TODO: add required mocks."]
     fn test_main_bedcov_execution() {
         // Similarly, mock bedcov::bedcov and verify it was called correctly.
     }
