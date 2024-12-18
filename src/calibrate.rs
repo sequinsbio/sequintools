@@ -483,6 +483,18 @@ fn calibrated_contigs(path: &String) -> Result<HashSet<String>> {
 }
 
 #[cfg(test)]
+impl DepthResult {
+    pub fn create_for_test(hist: Vec<(u32, u32)>, mean: f64, len: u32) -> Self {
+        // Provide a default instance for testing
+        Self {
+            histogram: hist,
+            mean: mean,
+            len: len,
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
