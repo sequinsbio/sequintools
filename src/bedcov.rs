@@ -1,7 +1,7 @@
 use crate::calibrate::{mean_depth, DepthResult};
 use crate::region::{load_from_bed, Region};
 use crate::BedcovArgs;
-use anyhow::{Error, Result};
+use anyhow::Result;
 use rust_htslib::bam;
 use std::fs::File;
 use std::io::{self, Write};
@@ -100,7 +100,7 @@ fn build_line_for_header(region: &Region, depth_result: &DepthResult) -> Result<
             "mean" => depth_result.mean().unwrap_or(0.0).to_string(),
             "std" => depth_result.std().unwrap_or(0.0).to_string(),
             "cv" => depth_result.cv().unwrap_or(0.0).to_string(),
-            _ => return Err(anyhow::anyhow!("Unexpected header: {}", header)),
+            _ => panic!("Unexpected header: {}", header),
         };
     }
     Ok(line)
@@ -141,7 +141,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_build_line() {
+    fn build_line() {
         let region = Region {
             contig: "chr1".to_owned(),
             beg: 100,
@@ -160,16 +160,16 @@ mod tests {
         assert_eq!(
             line,
             vec![
-                "chr1".to_string(),
-                "100".to_string(),
-                "200".to_string(),
-                "region1".to_string(),
-                "10".to_string(),
-                "31".to_string(),
-                "37".to_string(),
-                "34.4".to_string(),
-                "2.154066".to_string(),
-                "0.062618196".to_string(),
+                "chr1",
+                "100",
+                "200",
+                "region1",
+                "10",
+                "31",
+                "37",
+                "34.4",
+                "2.154066",
+                "0.062618196",
             ]
         );
     }
@@ -189,7 +189,7 @@ mod tests {
     chr2,99,199,reg2,100,29,41,35.25,3.3087008,0.09386385";
 
     #[test]
-    fn test_bedcov_report() {
+    fn bedcov_report_with_wtr() {
         let mut buffer = Vec::new();
         let bam_path = &get_test_path("bam");
         let bed_path = &get_test_path("bed");
@@ -204,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bedcov() {
+    fn bedcov_stdout() {
         // BedcovArgs for testing
         let args = BedcovArgs {
             bam_path: get_test_path("bam"),
@@ -217,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bedcov_with_wrong_bam_path() {
+    fn bedcov_with_wrong_bam_path() {
         let args = BedcovArgs {
             bam_path: "wrong_path.bam".to_owned(),
             bed_path: get_test_path("bed"),
@@ -229,7 +229,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bedcov_with_invalid_bed_path() {
+    fn bedcov_with_invalid_bed_path() {
         let args = BedcovArgs {
             bam_path: get_test_path("bam"),
             bed_path: "wrong_path.bam".to_owned(),
