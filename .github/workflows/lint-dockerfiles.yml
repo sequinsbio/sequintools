@@ -1,0 +1,27 @@
+name: Lint Dockerfiles
+
+on: # rebuild any PRs and main branch changes
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**/Dockerfile'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/Dockerfile'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Lint Dockerfiles
+      uses: hadolint/hadolint-action@v3.1.0
+      with:
+        dockerfile: 'Dockerfile'
+        recursive: true
