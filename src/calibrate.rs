@@ -25,9 +25,7 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
 // calibrate sequin coverage by applying a mean target coverage to all sequin
 // regions.
 pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
-    let f = File::open(&args.bed)?;
-    let mut reader = io::BufReader::new(f);
-    let regions = region::load_from_bed(&mut reader)?;
+    let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
 
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
@@ -59,11 +57,10 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
                 depth * (coverage / depth)
             );
 
-            let chrom = region.contig.as_str();
             let beg = region.beg + args.flank as u64;
             let end = region.end - args.flank as u64;
 
-            bam.fetch((chrom, beg, end)).unwrap();
+            bam.fetch((&region.contig, beg, end)).unwrap();
 
             for r in bam.records() {
                 let record = r.unwrap();
@@ -210,9 +207,7 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     let sample_bed = args.sample_bed.as_ref().unwrap();
     let cal_contigs = calibrated_contigs(&args.bed)?;
 
-    let f = File::open(&args.bed)?;
-    let mut reader = io::BufReader::new(f);
-    let regions = region::load_from_bed(&mut reader)?;
+    let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
         Err(err) => {
@@ -243,9 +238,8 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
             let contig = target_names[i as usize];
             if cal_contigs.contains(contig) {
                 let mut sample_regions_map = HashMap::new();
-                let f = File::open(sample_bed)?;
-                let mut reader = io::BufReader::new(f);
-                let sample_regions = region::load_from_bed(&mut reader)?;
+                let sample_regions =
+                    region::load_from_bed(&mut io::BufReader::new(File::open(sample_bed)?))?;
                 for region in &sample_regions {
                     sample_regions_map.insert(&region.name, region);
                 }
