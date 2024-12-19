@@ -24,7 +24,6 @@ jobs:
     - name: Run cargo-tarpaulin
       uses: actions-rs/tarpaulin@v0.1
       with:
-        version: 'latest'
         args: --all-features --out xml
 
     - name: Upload coverage to Codecov
