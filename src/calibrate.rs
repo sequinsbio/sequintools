@@ -26,7 +26,6 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
 // regions.
 pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
-
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
         Err(err) => {
