@@ -5,8 +5,6 @@ Generation Sequencing data that has sequins added to the sample.
 
 ## Installation
 
-**(currently these don't actually work, but it would be cool if they did)**
-
 If you're a Rust programmer, `sequintools` can be installed with `cargo`.
 
 ```sh
