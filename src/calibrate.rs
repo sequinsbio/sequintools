@@ -198,7 +198,6 @@ pub fn mean_depth(
         mean: total as f64 / len as f64,
         len,
     })
-    // Ok(total as f64 / len as f64)
 }
 
 //  What if we use a sliding window over the region and determine the depth of
@@ -301,8 +300,6 @@ fn calibrate_regions(
 
         let region_beg = region.beg + args.flank as u64;
         let region_end = region.end - args.flank as u64 - args.window_size;
-        // let region_beg = region.beg;
-        // let region_end = region.end - args.window_size;
 
         // This should be all reads mapped to a region
         let records = records_that_start_in_region(bam, contig, region.beg, region.end);
@@ -363,7 +360,6 @@ fn calibrate_regions(
 }
 
 fn starts_in(bam: &mut bam::IndexedReader, region: &Region, min_mapq: u8) -> i64 {
-    // let min_mapq = 10;
     let chrom = region.contig.as_str();
     let beg = region.beg as i64;
     let end = region.end as i64;
@@ -393,8 +389,6 @@ pub fn window_starts(
     let name = &region.name;
     let region_beg = region.beg + flank;
     let region_end = region.end - flank - window_size;
-    // let region_beg = region.beg;
-    // let region_end = region.end - window_size as u64;
     let mut starts = Vec::new();
 
     for beg in (region_beg..region_end).step_by(window_size as usize) {
