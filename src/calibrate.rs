@@ -433,11 +433,8 @@ impl fmt::Display for CalibrateError {
     }
 }
 
-impl Error for CalibrateError {
-    fn description(&self) -> &str {
-        &self.details
-    }
-}
+// Implement the Error trait to make it a proper error type
+impl Error for CalibrateError {}
 
 fn choose_from(size: i64, n: i64, seed: u64) -> Result<Vec<i64>, CalibrateError> {
     let mut rng = Pcg32::seed_from_u64(seed);
@@ -446,7 +443,7 @@ fn choose_from(size: i64, n: i64, seed: u64) -> Result<Vec<i64>, CalibrateError>
         Ok(xs)
     } else {
         let msg = format!("sample size is too big, wanted {} from {}", n, size);
-        Err(CalibrateError::new(msg.as_str()))
+        Err(CalibrateError::new(&msg))
     }
 }
 
@@ -569,5 +566,43 @@ mod tests {
         };
         let result = mean_depth(&mut bam, &region, 0, 10).unwrap().mean;
         assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_calibrated_error() {
+        let err = CalibrateError::new("test error");
+        assert_eq!(err.to_string(), "test error");
+    }
+
+    #[test]
+    fn test_choose_from() {
+        // Test successful case
+        let result = choose_from(10, 5, 42);
+        assert!(result.is_ok());
+        let values = result.unwrap();
+        assert_eq!(values.len(), 5);
+        assert!(values.iter().all(|&x| x >= 0 && x < 10));
+
+        // Test requesting more items than available
+        let result = choose_from(5, 10, 42);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "sample size is too big, wanted 10 from 5"
+        );
+
+        // Test empty source range
+        let result = choose_from(0, 1, 42);
+        assert!(result.is_err());
+
+        // Test requesting zero items
+        let result = choose_from(5, 0, 42);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
+
+        // Test deterministic results with same seed
+        let result1 = choose_from(10, 3, 42).unwrap();
+        let result2 = choose_from(10, 3, 42).unwrap();
+        assert_eq!(result1, result2);
     }
 }
