@@ -55,7 +55,7 @@ fn bedcov_report<W: Write>(
     let regions: Vec<Region> = load_from_bed(&mut io::BufReader::new(File::open(bed_path)?))?;
 
     let mut wtr = csv::Writer::from_writer(dest);
-    wtr.write_record(&REPORT_HEADER)?;
+    wtr.write_record(REPORT_HEADER)?;
     for region in &regions {
         let depth_result = mean_depth(&mut bam, region, flank, min_mapq)?;
         let record = build_line_for_header(region, &depth_result)?;

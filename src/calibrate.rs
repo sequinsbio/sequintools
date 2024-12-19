@@ -484,12 +484,12 @@ fn calibrated_contigs(path: &str) -> Result<HashSet<String>> {
 
 #[cfg(test)]
 impl DepthResult {
-    pub fn create_for_test(hist: Vec<(u32, u32)>, mean: f64, len: u32) -> Self {
+    pub fn create_for_test(histogram: Vec<(u32, u32)>, mean: f64, len: u32) -> Self {
         // Provide a default instance for testing
         Self {
-            histogram: hist,
-            mean: mean,
-            len: len,
+            histogram,
+            mean,
+            len,
         }
     }
 }
@@ -510,21 +510,29 @@ mod tests {
             end: 199,
             name: "region".to_owned(),
         };
-        let starts = window_starts(&mut bam, &region, 0, 50, 0);
-        assert_eq!(starts.len(), 1);
+        let starts = window_starts(&mut bam, &region, 0, 10, 0);
+        assert_eq!(starts.len(), 9);
     }
 
     #[test]
     fn test_window_starts_with_mapq() {
         let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
         let region = Region {
-            contig: "chr2".to_owned(),
+            contig: "chr3".to_owned(),
             beg: 99,
-            end: 199,
+            end: 878,
             name: "reg2".to_owned(),
         };
-        let starts = window_starts(&mut bam, &region, 0, 50, 10);
-        assert_eq!(starts.iter().sum::<i64>(), 0);
+        let starts = window_starts(&mut bam, &region, 0, 100, 98);
+
+        let expected = vec![36, 37, 35, 36, 20, 29, 32];
+        for (i, cnt) in starts.iter().enumerate() {
+            assert_eq!(
+                cnt, &expected[i],
+                "Window {}: Expected {} but Got {} ",
+                i, expected[i], cnt
+            );
+        }
     }
 
     #[test]
