@@ -21,10 +21,14 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y cmake clang
 
-    - name: Run cargo-tarpaulin
-      uses: actions-rs/tarpaulin@v0.1
+    - name: Install cargo-tarpaulin
+      uses: actions-rs/install@v0.1
       with:
-        args: --all-features --out xml
+        create: cargo-tarpaulin
+        version: latest
+
+    - name: Run cargo-tarpaulin
+      run: cargo tarpaulin --verbose --all-features --out xml
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v2
