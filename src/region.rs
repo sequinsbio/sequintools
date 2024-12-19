@@ -60,34 +60,33 @@ pub fn load_from_bed<R: Read>(reader: &mut R) -> Result<Vec<Region>> {
     reader.read_to_string(&mut contents)?;
     for (i, line) in contents.lines().enumerate() {
         let bits: Vec<&str> = line.split_whitespace().collect();
-        if bits.len() < 4 {
+        let [contig, beg_str, end_str, name, ..] = bits[..] else {
             bail!(
                 "Incorrect number of columns detected, expected >= 4 found {} (line = {})",
                 bits.len(),
-                i + 1,
-            );
-        }
-        let contig = bits[0];
-        let beg: u64 = bits[1].parse().with_context(|| {
+                i + 1
+            )
+        };
+
+        let beg: u64 = beg_str.parse().with_context(|| {
             format!(
                 "Beg column is not an integer: is {} (line = {})",
                 bits[1],
                 i + 1
             )
         })?;
-        let end: u64 = bits[2].parse().with_context(|| {
+        let end: u64 = end_str.parse().with_context(|| {
             format!(
                 "End column is not an integer: is {} (line = {})",
                 bits[2],
                 i + 1
             )
         })?;
-        let name = bits[3];
         result.push(Region {
-            contig: String::from(contig),
+            contig: contig.to_owned(),
             beg,
             end,
-            name: String::from(name),
+            name: name.to_owned(),
         });
     }
     Ok(result)
@@ -99,7 +98,7 @@ mod tests {
     use std::io::{self, Cursor};
 
     #[test]
-    fn test_region_display() {
+    fn display_region() {
         let region = Region {
             contig: "chr1".to_owned(),
             beg: 100,
@@ -118,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_from_bed() {
+    fn load_bed_to_vec() {
         let data = b"chr1\t1\t10\treg1";
         let mut cursor = Cursor::new(data);
         let result = load_from_bed(&mut cursor).unwrap();
@@ -134,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_from_bed_multi_lines() {
+    fn load_multi_lines_bed() {
         let mut cursor = Cursor::new(b"chr1\t1\t10\treg1\nchr2\t2\t20\treg2");
         let result = load_from_bed(&mut cursor).unwrap();
         assert_eq!(
@@ -157,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_from_bed_with_bad_start() {
+    fn load_with_bad_start() {
         let mut cursor = Cursor::new(b"chr1\txxx\t10\treg1");
         let err = load_from_bed(&mut cursor).unwrap_err();
         // check that the error message is correct
@@ -167,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_from_bed_with_bad_end() {
+    fn load_with_bad_end() {
         let mut cursor = Cursor::new(b"chr1\t1\txxx\treg1");
         let err = load_from_bed(&mut cursor).unwrap_err();
         // check that the error message is correct
@@ -177,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load_from_bed_without_name() {
+    fn load_without_name() {
         let mut cursor = Cursor::new(b"chr1\t1\t10");
         let err = load_from_bed(&mut cursor).unwrap_err();
         // check that the error message is correct
@@ -193,7 +192,7 @@ mod tests {
         }
     }
     #[test]
-    fn test_load_err() {
+    fn load_invalid_reader() {
         let mut reader = ErrorReader;
         let result = load_from_bed(&mut reader);
         assert!(result.is_err());

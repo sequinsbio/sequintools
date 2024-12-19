@@ -1,10 +1,14 @@
-use crate::calibrate::mean_depth;
+use crate::calibrate::{mean_depth, DepthResult};
 use crate::region::{load_from_bed, Region};
 use crate::BedcovArgs;
 use anyhow::Result;
 use rust_htslib::bam;
 use std::fs::File;
 use std::io::{self, Write};
+
+const REPORT_HEADER: [&str; 10] = [
+    "chrom", "beg", "end", "name", "len", "min", "max", "mean", "std", "cv",
+];
 
 /// Generates a coverage report for genomic regions specified in a BED file.
 ///
@@ -51,26 +55,55 @@ fn bedcov_report<W: Write>(
     let regions: Vec<Region> = load_from_bed(&mut io::BufReader::new(File::open(bed_path)?))?;
 
     let mut wtr = csv::Writer::from_writer(dest);
-    wtr.write_record([
-        "chrom", "beg", "end", "name", "len", "min", "max", "mean", "std", "cv",
-    ])?;
+    wtr.write_record(REPORT_HEADER)?;
     for region in &regions {
         let depth_result = mean_depth(&mut bam, region, flank, min_mapq)?;
-        wtr.write_record([
-            &region.contig,
-            &region.beg.to_string(),
-            &region.end.to_string(),
-            &region.name,
-            &depth_result.len().to_string(),
-            &depth_result.min().unwrap_or(0).to_string(),
-            &depth_result.max().unwrap_or(0).to_string(),
-            &depth_result.mean().unwrap_or(0.0).to_string(),
-            &depth_result.std().unwrap_or(0.0).to_string(),
-            &depth_result.cv().unwrap_or(0.0).to_string(),
-        ])?;
+        let record = build_line_for_header(region, &depth_result)?;
+        wtr.write_record(record)?;
     }
     wtr.flush()?;
     Ok(())
+}
+
+/// Builds a line of CSV data corresponding to the given region and depth result.
+///
+/// This function constructs a vector of strings representing a single line of CSV output,
+/// with each element in the vector corresponding to a column in the CSV file. The columns
+/// are defined by the `REPORT_HEADER` constant, and the values are extracted from the
+/// provided `region` and `depth_result`.
+///
+/// # Arguments
+///
+/// * `region` - A reference to a `Region` struct representing a genomic region.
+/// * `depth_result` - A reference to a `DepthResult` struct containing depth statistics for the region.
+///
+/// # Returns
+///
+/// Returns a `Result` containing:
+/// * `Ok(Vec<String>)` - A vector of strings representing the CSV line if successful.
+/// * `Err(Error)` - An error if an unexpected header is encountered.
+///
+/// # Errors
+///
+/// This function will return an error if an unexpected header is encountered in the `REPORT_HEADER` array.
+fn build_line_for_header(region: &Region, depth_result: &DepthResult) -> Result<Vec<String>> {
+    let mut line = vec!["".to_string(); REPORT_HEADER.len()];
+    for (i, header) in REPORT_HEADER.iter().enumerate() {
+        line[i] = match *header {
+            "chrom" => region.contig.clone(),
+            "beg" => region.beg.to_string(),
+            "end" => region.end.to_string(),
+            "name" => region.name.clone(),
+            "len" => depth_result.len().to_string(),
+            "min" => depth_result.min().unwrap_or(0).to_string(),
+            "max" => depth_result.max().unwrap_or(0).to_string(),
+            "mean" => depth_result.mean().unwrap_or(0.0).to_string(),
+            "std" => depth_result.std().unwrap_or(0.0).to_string(),
+            "cv" => depth_result.cv().unwrap_or(0.0).to_string(),
+            _ => panic!("Unexpected header: {}", header),
+        };
+    }
+    Ok(line)
 }
 
 /// Generates a coverage report for genomic regions and outputs it to the standard output.
@@ -107,10 +140,44 @@ pub fn bedcov(args: BedcovArgs) -> Result<()> {
 mod tests {
     use super::*;
 
-    fn test_path(key: &str) -> String {
+    #[test]
+    fn build_line() {
+        let region = Region {
+            contig: "chr1".to_owned(),
+            beg: 100,
+            end: 200,
+            name: "region1".to_owned(),
+        };
+
+        // Create a mock DepthResult for testing using direct struct initialization
+        let depth_result = DepthResult::create_for_test(
+            vec![(1, 33), (1, 31), (1, 36), (2, 35), (2, 37)],
+            30.0,
+            10,
+        );
+        let line = build_line_for_header(&region, &depth_result).unwrap();
+
+        assert_eq!(
+            line,
+            vec![
+                "chr1",
+                "100",
+                "200",
+                "region1",
+                "10",
+                "31",
+                "37",
+                "34.4",
+                "2.154066",
+                "0.062618196",
+            ]
+        );
+    }
+
+    fn get_test_path(key: &str) -> String {
         let file = match key {
             "bam" => "sim_R.bam",
-            "bed" => "test.bed",
+            "bed" => "region_test.bed",
             _ => panic!("Unknown test file key: {}", key),
         };
         format!("{}/testdata/{}", env!("CARGO_MANIFEST_DIR"), file)
@@ -122,10 +189,10 @@ mod tests {
     chr2,99,199,reg2,100,29,41,35.25,3.3087008,0.09386385";
 
     #[test]
-    fn test_bedcov_report() {
+    fn bedcov_report_with_wtr() {
         let mut buffer = Vec::new();
-        let bam_path = &test_path("bam");
-        let bed_path = &test_path("bed");
+        let bam_path = &get_test_path("bam");
+        let bed_path = &get_test_path("bed");
         let result = bedcov_report(bam_path, bed_path, 0, 0, &mut buffer);
         assert!(result.is_ok());
 
@@ -137,11 +204,11 @@ mod tests {
     }
 
     #[test]
-    fn test_bedcov() {
+    fn bedcov_stdout() {
         // BedcovArgs for testing
         let args = BedcovArgs {
-            bam_path: test_path("bam"),
-            bed_path: test_path("bed"),
+            bam_path: get_test_path("bam"),
+            bed_path: get_test_path("bed"),
             min_mapq: 0,
             flank: 0,
         };
@@ -150,10 +217,10 @@ mod tests {
     }
 
     #[test]
-    fn test_bedcov_with_wrong_bam_path() {
+    fn bedcov_with_wrong_bam_path() {
         let args = BedcovArgs {
             bam_path: "wrong_path.bam".to_owned(),
-            bed_path: test_path("bed"),
+            bed_path: get_test_path("bed"),
             min_mapq: 0,
             flank: 0,
         };
@@ -162,9 +229,9 @@ mod tests {
     }
 
     #[test]
-    fn test_bedcov_with_invalid_bed_path() {
+    fn bedcov_with_invalid_bed_path() {
         let args = BedcovArgs {
-            bam_path: test_path("bam"),
+            bam_path: get_test_path("bam"),
             bed_path: "wrong_path.bam".to_owned(),
             min_mapq: 0,
             flank: 0,
