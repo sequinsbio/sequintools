@@ -1,4 +1,4 @@
-use crate::region::{load_from_bed, Region};
+use crate::region::{self, Region};
 use crate::CalibrateArgs;
 use anyhow::{Context, Result};
 use rand::seq::IteratorRandom;
@@ -25,10 +25,7 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
 // calibrate sequin coverage by applying a mean target coverage to all sequin
 // regions.
 pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
-    let f = File::open(&args.bed)?;
-    let mut reader = io::BufReader::new(f);
-    let regions = load_from_bed(&mut reader)?;
-
+    let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
         Err(err) => {
@@ -59,11 +56,10 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
                 depth * (coverage / depth)
             );
 
-            let chrom = region.contig.as_str();
             let beg = region.beg + args.flank as u64;
             let end = region.end - args.flank as u64;
 
-            bam.fetch((chrom, beg, end)).unwrap();
+            bam.fetch((&region.contig, beg, end)).unwrap();
 
             for r in bam.records() {
                 let record = r.unwrap();
@@ -198,7 +194,6 @@ pub fn mean_depth(
         mean: total as f64 / len as f64,
         len,
     })
-    // Ok(total as f64 / len as f64)
 }
 
 //  What if we use a sliding window over the region and determine the depth of
@@ -211,9 +206,7 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     let sample_bed = args.sample_bed.as_ref().unwrap();
     let cal_contigs = calibrated_contigs(&args.bed)?;
 
-    let f = File::open(&args.bed)?;
-    let mut reader = io::BufReader::new(f);
-    let regions = load_from_bed(&mut reader)?;
+    let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
         Err(err) => {
@@ -244,9 +237,8 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
             let contig = target_names[i as usize];
             if cal_contigs.contains(contig) {
                 let mut sample_regions_map = HashMap::new();
-                let f = File::open(sample_bed)?;
-                let mut reader = io::BufReader::new(f);
-                let sample_regions = load_from_bed(&mut reader)?;
+                let sample_regions =
+                    region::load_from_bed(&mut io::BufReader::new(File::open(sample_bed)?))?;
                 for region in &sample_regions {
                     sample_regions_map.insert(&region.name, region);
                 }
@@ -301,8 +293,6 @@ fn calibrate_regions(
 
         let region_beg = region.beg + args.flank as u64;
         let region_end = region.end - args.flank as u64 - args.window_size;
-        // let region_beg = region.beg;
-        // let region_end = region.end - args.window_size;
 
         // This should be all reads mapped to a region
         let records = records_that_start_in_region(bam, contig, region.beg, region.end);
@@ -363,21 +353,14 @@ fn calibrate_regions(
 }
 
 fn starts_in(bam: &mut bam::IndexedReader, region: &Region, min_mapq: u8) -> i64 {
-    // let min_mapq = 10;
-    let chrom = region.contig.as_str();
-    let beg = region.beg as i64;
-    let end = region.end as i64;
+    let (beg, end) = (region.beg as i64, region.end as i64);
     let mut n: i64 = 0;
-    bam.fetch((chrom, beg, end)).unwrap();
+    bam.fetch((&region.contig, beg, end)).unwrap();
     for r in bam.records() {
         let record = r.unwrap();
-        if record.pos() < beg || record.pos() > end {
-            continue;
+        if record.pos() >= beg && record.pos() <= end && record.mapq() >= min_mapq {
+            n += 1;
         }
-        if record.mapq() < min_mapq {
-            continue;
-        }
-        n += 1;
     }
     n
 }
@@ -389,23 +372,21 @@ pub fn window_starts(
     window_size: u64,
     min_mapq: u8,
 ) -> Vec<i64> {
-    let contig = &region.contig;
-    let name = &region.name;
+    let (contig, name) = (&region.contig, &region.name);
+    let mut starts = Vec::new();
+
     let region_beg = region.beg + flank;
     let region_end = region.end - flank - window_size;
-    // let region_beg = region.beg;
-    // let region_end = region.end - window_size as u64;
-    let mut starts = Vec::new();
 
     for beg in (region_beg..region_end).step_by(window_size as usize) {
         let end = beg + window_size - 1;
         let n = starts_in(
             bam,
             &Region {
-                contig: contig.to_string(),
+                contig: contig.to_owned(),
                 beg,
                 end,
-                name: name.to_string(),
+                name: name.to_owned(),
             },
             min_mapq,
         );
@@ -441,7 +422,7 @@ struct CalibrateError {
 impl CalibrateError {
     fn new(msg: &str) -> CalibrateError {
         CalibrateError {
-            details: msg.to_string(),
+            details: msg.to_owned(),
         }
     }
 }
@@ -472,12 +453,9 @@ fn choose_from(size: i64, n: i64, seed: u64) -> Result<Vec<i64>, CalibrateError>
 // Return the unique set of contig names in a BED file
 fn calibrated_contigs(path: &str) -> Result<HashSet<String>> {
     let mut contigs = HashSet::new();
-    let f = File::open(path)?;
-    let mut reader = io::BufReader::new(f);
-    let regions = load_from_bed(&mut reader)?;
+    let regions = region::load_from_bed(&mut io::BufReader::new(File::open(path)?))?;
     for region in &regions {
-        let contig = String::from(&region.contig);
-        contigs.insert(contig);
+        contigs.insert(region.contig.to_owned());
     }
     Ok(contigs)
 }
