@@ -2,7 +2,7 @@
 name = "sequintools"
 version = "0.3.0"
 edition = "2021"
-license = "Apache 2.0"
+license = "Apache-2.0"
 publish = true
 description = "A suite of tools for manipulating and reporting on NGS data that has sequins added to the sample."
 readme = "README.md"
