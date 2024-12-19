@@ -1,0 +1,41 @@
+name: Test and lint code without using the devcontainer
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: clippy, rustfmt
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake clang
+
+    - name: Run cargo-tarpaulin
+      uses: actions-rs/tarpaulin@v0.1
+      with:
+        version: 'latest'
+        args: --all-features --out xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v2
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        flags: unittest
+        name: job-name-${{ github.run_id }}
+        verbose: true
+
+    - name: Run format tests and lints
+      run: |
+        cargo fmt --all -- --check
+        cargo clippy --all --all-features --tests -- -D warnings
