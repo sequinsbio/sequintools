@@ -525,7 +525,7 @@ mod tests {
         };
         let starts = window_starts(&mut bam, &region, 0, 100, 98);
 
-        let expected = vec![36, 37, 35, 36, 20, 29, 32];
+        let expected = [36, 37, 35, 36, 20, 29, 32];
         for (i, cnt) in starts.iter().enumerate() {
             assert_eq!(
                 cnt, &expected[i],
