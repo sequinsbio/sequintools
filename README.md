@@ -11,12 +11,27 @@ If you're a Rust programmer, `sequintools` can be installed with `cargo`.
 $ cargo install sequintools
 ```
 
+Note that sequintools has a dependency on `cmake` and `clang`, and these will
+need to be installed on your device before you can install `sequintools`.
+
 Alternatively, one can use `cargo binstall` to install a `sequintools` binary
 directly from GitHub:
 
 ```sh
 $ cargo binstall sequintools
 ```
+
+**Note** that sequintools has a dependency on `cmake` and `clang`, and these
+will need to be installed on your device before you can install `sequintools`.
+On a linux device you would usually install these using apt, e.g.
+
+```sh
+sudo apt update && sudo apt install -y cmake clang
+```
+
+If you're not using a linux device then you'll need to research how to install
+the dependencies on your device. Alteratively you can use the docker build
+which will already have the dependencies required installed.
 
 ## Docker
 
