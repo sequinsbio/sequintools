@@ -630,7 +630,7 @@ mod tests {
         assert!(result.is_ok());
         let values = result.unwrap();
         assert_eq!(values.len(), 5);
-        assert!(values.iter().all(|&x| x >= 0 && x < 10));
+        assert!(values.iter().all(|&x| (0..10).contains(&x)));
 
         // Test requesting more items than available
         let result = choose_from(5, 10, 42);
