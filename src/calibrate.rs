@@ -25,6 +25,13 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
 // calibrate sequin coverage by applying a mean target coverage to all sequin
 // regions.
 pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
+    if args.sample_bed.is_some() {
+        return Err(CalibrateError::new(
+            "Cannot use standard coverage calibration when sample bed file is provided",
+        )
+        .into());
+    }
+
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
@@ -202,7 +209,13 @@ pub fn mean_depth(
 //  we handle secondary/supplementry/duplicate reads? We can experiment with
 //  different window sizes to get the best replication of the sample coverage.
 fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
-    // shouldn't be calling this function if sample_bed is not provided
+    // Should NOT enter this function if sample_bed in args is not provided.
+    if args.sample_bed.is_none() {
+        return Err(CalibrateError::new(
+            "Cannot use sample coverage calibration when sample_bed file is not provided.",
+        )
+        .into());
+    }
     let sample_bed = args.sample_bed.as_ref().unwrap();
     let cal_contigs = calibrated_contigs(&args.bed)?;
 
@@ -472,9 +485,45 @@ impl DepthResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::NamedTempFile;
 
     const TEST_BAM_PATH: &str = "testdata/sim_R.bam";
     const TEST_BED_PATH: &str = "testdata/region_test.bed";
+
+    fn mock_calibrate_args(with_sample: bool) -> CalibrateArgs {
+        CalibrateArgs {
+            bed: "test.bed".to_owned(),
+            path: "test.bam".to_owned(),
+            output: None,
+            sample_bed: if with_sample {
+                Some("testdata/sim_region.bed".to_owned())
+            } else {
+                None
+            },
+            flank: 0,
+            seed: 42,
+            fold_coverage: 1,
+            window_size: 10,
+            min_mapq: 0,
+            write_index: false,
+            exclude_uncalibrated_reads: false,
+        }
+    }
+
+    #[test]
+    fn test_sample_coverage_err() {
+        // Without sample_bed
+        let args_without_sample = mock_calibrate_args(false);
+        let result = calibrate_by_sample_coverage(args_without_sample);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_standard_coverage_err() {
+        let test_args_with_sample = mock_calibrate_args(true);
+        let result = calibrate_by_standard_coverage(test_args_with_sample);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_window_starts() {
@@ -604,5 +653,44 @@ mod tests {
         let result1 = choose_from(10, 3, 42).unwrap();
         let result2 = choose_from(10, 3, 42).unwrap();
         assert_eq!(result1, result2);
+    }
+
+    #[test]
+    fn test_calibrate_regions() {
+        // Setup test data
+        let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
+        let header = bam::Header::from_template(bam.header());
+
+        // Create temporary file for output
+        let temp_file = NamedTempFile::new().unwrap();
+        let mut temp_output =
+            bam::Writer::from_path(temp_file.path(), &header, bam::Format::Bam).unwrap();
+
+        let regions =
+            region::load_from_bed(&mut io::BufReader::new(File::open(TEST_BED_PATH).unwrap()))
+                .unwrap();
+        let mut sample_regions_map = HashMap::new();
+        for region in &regions {
+            sample_regions_map.insert(&region.name, region);
+        }
+        let args = mock_calibrate_args(true);
+
+        // Run calibration
+        calibrate_regions(
+            &mut bam,
+            &mut temp_output,
+            &regions,
+            sample_regions_map,
+            &args,
+        );
+
+        // Flush and close output
+        drop(temp_output);
+
+        // Verify output file exists and has content
+        let metadata = std::fs::metadata(temp_file.path()).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
+
+        // TODO: check the output BAM
     }
 }

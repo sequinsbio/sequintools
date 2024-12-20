@@ -6,3 +6,15 @@ example/genome.fa*
 example/*.fq
 example/*.fq.gz
 example/example.calibrated*
+
+# tarpaulin files #
+######################
+tarpaulin-report.html
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._.DS_Store
+**/.DS_Store
+**/._.DS_Store
