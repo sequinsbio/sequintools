@@ -19,7 +19,7 @@
 //! Contains unit tests for verifying the functionality of the `Region` struct and the `load_from_bed` function.
 use anyhow::{bail, Context, Result};
 use std::fmt;
-use std::io::Read;
+use std::io::{BufRead, BufReader, Read};
 
 /// Represents a genomic region within a contig.
 ///
@@ -54,42 +54,46 @@ impl fmt::Display for Region {
 /// # Returns
 ///
 /// A `Result` containing a vector of `Region` structs if successful, or an error if parsing fails.
-pub fn load_from_bed<R: Read>(reader: &mut R) -> Result<Vec<Region>> {
-    let mut result = Vec::new();
-    let mut contents = String::new();
-    reader.read_to_string(&mut contents)?;
-    for (i, line) in contents.lines().enumerate() {
-        let bits: Vec<&str> = line.split_whitespace().collect();
-        let [contig, beg_str, end_str, name, ..] = bits[..] else {
-            bail!(
-                "Incorrect number of columns detected, expected >= 4 found {} (line = {})",
-                bits.len(),
-                i + 1
-            )
-        };
-
-        let beg: u64 = beg_str.parse().with_context(|| {
-            format!(
-                "Beg column is not an integer: is {} (line = {})",
-                bits[1],
-                i + 1
-            )
-        })?;
-        let end: u64 = end_str.parse().with_context(|| {
-            format!(
-                "End column is not an integer: is {} (line = {})",
-                bits[2],
-                i + 1
-            )
-        })?;
-        result.push(Region {
-            contig: contig.to_owned(),
-            beg,
-            end,
-            name: name.to_owned(),
-        });
-    }
-    Ok(result)
+pub fn load_from_bed<R: Read>(reader: R) -> Result<Vec<Region>> {
+    BufReader::new(reader)
+        .lines()
+        .enumerate()
+        .map(|(index, line)| {
+            let line = line?;
+            if line.starts_with('#') || line.starts_with("track") || line.starts_with("browser") {
+                return Ok(None);
+            }
+            let bits: Vec<&str> = line.split_whitespace().collect();
+            let [contig, beg_str, end_str, name, ..] = bits[..] else {
+                bail!(
+                    "Incorrect number of columns detected, expected >= 4 found {} (line = {})",
+                    bits.len(),
+                    index + 1
+                )
+            };
+            let beg: u64 = beg_str.parse().with_context(|| {
+                format!(
+                    "Beg column is not an integer: is {} (line = {})",
+                    beg_str,
+                    index + 1
+                )
+            })?;
+            let end: u64 = end_str.parse().with_context(|| {
+                format!(
+                    "End column is not an integer: is {} (line = {})",
+                    end_str,
+                    index + 1
+                )
+            })?;
+            Ok(Some(Region {
+                contig: contig.to_owned(),
+                beg,
+                end,
+                name: name.to_owned(),
+            }))
+        })
+        .collect::<Result<Vec<Option<Region>>>>()
+        .map(|vec| vec.into_iter().flatten().collect())
 }
 
 #[cfg(test)]
@@ -195,6 +199,39 @@ mod tests {
     fn load_invalid_reader() {
         let mut reader = ErrorReader;
         let result = load_from_bed(&mut reader);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_import_from_bed_with_header() {
+        let content = "\
+# A comment
+browser hide all
+track name=chr1 description=\"Example track\" visibility=full
+chr1\t10\t20\tregion1
+";
+        let reader = Cursor::new(content);
+        let result = load_from_bed(reader).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result,
+            vec![Region {
+                contig: "chr1".to_owned(),
+                beg: 10,
+                end: 20,
+                name: "region1".to_owned()
+            }]
+        );
+    }
+
+    #[test]
+    fn test_import_from_bed_with_invalid_header() {
+        let content = "\
+my_track name=chr1 description=\"Example track\" visibility=full
+chr1\t10\t20\tregion1
+";
+        let reader = Cursor::new(content);
+        let result = load_from_bed(reader);
         assert!(result.is_err());
     }
 }
