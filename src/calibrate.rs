@@ -490,13 +490,25 @@ mod tests {
     const TEST_BAM_PATH: &str = "testdata/sim_R.bam";
     const TEST_BED_PATH: &str = "testdata/region_test.bed";
 
-    fn mock_calibrate_args(with_sample: bool) -> CalibrateArgs {
+    fn mock_calibrate_args(with_sample: bool, need_output: bool) -> CalibrateArgs {
         CalibrateArgs {
-            bed: "test.bed".to_owned(),
-            path: "test.bam".to_owned(),
-            output: None,
+            bed: TEST_BED_PATH.to_owned(),
+            path: TEST_BAM_PATH.to_owned(),
+            output: if need_output {
+                // Create temporary file for output, it ensures a unique file name.
+                Some(
+                    NamedTempFile::new()
+                        .unwrap()
+                        .path()
+                        .to_string_lossy()
+                        .into_owned(),
+                )
+            } else {
+                None
+            },
             sample_bed: if with_sample {
-                Some("testdata/sim_region.bed".to_owned())
+                // Fake path to sample bed which is required for this test
+                Some("some/sim.bed".to_owned())
             } else {
                 None
             },
@@ -513,14 +525,14 @@ mod tests {
     #[test]
     fn test_sample_coverage_err() {
         // Without sample_bed
-        let args_without_sample = mock_calibrate_args(false);
+        let args_without_sample = mock_calibrate_args(false, false);
         let result = calibrate_by_sample_coverage(args_without_sample);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_standard_coverage_err() {
-        let test_args_with_sample = mock_calibrate_args(true);
+        let test_args_with_sample = mock_calibrate_args(true, false);
         let result = calibrate_by_standard_coverage(test_args_with_sample);
         assert!(result.is_err());
     }
@@ -661,11 +673,6 @@ mod tests {
         let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
         let header = bam::Header::from_template(bam.header());
 
-        // Create temporary file for output
-        let temp_file = NamedTempFile::new().unwrap();
-        let mut temp_output =
-            bam::Writer::from_path(temp_file.path(), &header, bam::Format::Bam).unwrap();
-
         let regions =
             region::load_from_bed(&mut io::BufReader::new(File::open(TEST_BED_PATH).unwrap()))
                 .unwrap();
@@ -673,7 +680,9 @@ mod tests {
         for region in &regions {
             sample_regions_map.insert(&region.name, region);
         }
-        let args = mock_calibrate_args(true);
+        let args = mock_calibrate_args(true, true);
+        let out_path = args.output.clone().unwrap();
+        let mut temp_output = bam::Writer::from_path(&out_path, &header, bam::Format::Bam).unwrap();
 
         // Run calibration
         calibrate_regions(
@@ -688,7 +697,30 @@ mod tests {
         drop(temp_output);
 
         // Verify output file exists and has content
-        let metadata = std::fs::metadata(temp_file.path()).unwrap();
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
+
+        // TODO: check the output BAM
+    }
+
+    #[test]
+    #[ignore = "TODO: add required mocks."]
+    fn test_calibrate_by_sample_coverage() {
+        let args = mock_calibrate_args(true, true);
+        let result = calibrate_by_sample_coverage(args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_calibrate_by_standard_coverage() {
+        let args = mock_calibrate_args(false, true);
+        let out_path = args.output.clone().unwrap();
+
+        let result = calibrate_by_standard_coverage(args);
+        assert!(result.is_ok());
+
+        // Verify output file exists and has content
+        let metadata = std::fs::metadata(&out_path).unwrap();
         assert!(metadata.len() > 0, "Output BAM file should not be empty");
 
         // TODO: check the output BAM
