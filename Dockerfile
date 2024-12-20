@@ -5,8 +5,8 @@
 FROM mcr.microsoft.com/devcontainers/rust:1-1-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  cmake \
-  clang \
+  cmake=3.25.1-1 \
+  clang=1:14.0-55.7~deb12u1 \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/sequins
@@ -20,7 +20,7 @@ COPY ./src ./src
 RUN cargo build --release
 
 # Stage 2: Create final Docker image with debain-slim.
-FROM ghcr.io/linuxcontainers/debian-slim:latest
+FROM ghcr.io/linuxcontainers/debian-slim:12.5
 
 # Copy app and test data.
 COPY --from=builder /usr/sequins/target/release/sequintools /usr/local/bin/sequintools
