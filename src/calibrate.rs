@@ -1,3 +1,58 @@
+//! Calibration module for sequencing data analysis.
+//!
+//! This module provides functionality for calibrating sequencing data based on coverage analysis.
+//! It supports two main calibration methods:
+//! - Standard coverage calibration: Applies a mean target coverage to all sequin regions
+//! - Sample coverage calibration: Calibrates based on sample-specific coverage patterns
+//!
+//! # Main Functions
+//!
+//! - [`calibrate`]: Main entry point for calibration operations
+//! - [`calibrate_by_standard_coverage`]: Performs standard coverage-based calibration
+//! - [`calibrate_by_sample_coverage`]: Performs sample-specific coverage calibration
+//! - [`mean_depth`]: Calculates mean depth for a given region
+//!
+//! # Types
+//!
+//! - [`DepthResult`]: Represents depth calculation results including histogram and statistics
+//! - [`CalibrateError`]: Custom error type for calibration operations
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use sequintools::CalibrateArgs;
+//! use sequintools::calibrate;
+//!
+//! let args = CalibrateArgs {
+//!     // ... configure arguments
+//! };
+//!
+//! match calibrate::calibrate(args) {
+//!     Ok(_) => println!("Calibration successful"),
+//!     Err(e) => eprintln!("Calibration failed: {}", e),
+//! }
+//! ```
+//!
+//! # Features
+//!
+//! - BAM file processing and indexing
+//! - Region-specific depth calculation
+//! - Coverage histogram generation
+//! - Statistical analysis of coverage data
+//! - Support for paired-end reads
+//! - Configurable mapping quality filters
+//!
+//! # Technical Details
+//!
+//! The module handles both standard and sample-based calibration methods:
+//! - Standard calibration applies a uniform coverage target
+//! - Sample-based calibration uses sliding windows to match coverage patterns
+//! - Both methods preserve read pairs and handle various read flags
+//!
+//! # Note
+//!
+//! Ensure input BAM files are properly indexed before calibration.
+//! The module assumes 0-based coordinates in BED files.
 use crate::region::{self, Region};
 use crate::CalibrateArgs;
 use anyhow::{Context, Result};
