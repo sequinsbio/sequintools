@@ -1,8 +1,3 @@
 {
-  "bootstrap-sha": "714ba4bae52aa6cc7d4609cba93110d326cb71c5",
-  "release-type": "rust",
-  "bump-minor-pre-major": true,
-  "bump-patch-for-minor-pre-major": true,
-  "always-update": true,
-  "group-pull-request-title-pattern": "chore: release ${branch}"
+  ".": "0.3.0"
 }
