@@ -507,8 +507,7 @@ mod tests {
                 None
             },
             sample_bed: if with_sample {
-                // Fake path to sample bed which is required for this test
-                Some("some/sim.bed".to_owned())
+                Some(TEST_BED_PATH.to_owned())
             } else {
                 None
             },
@@ -520,21 +519,6 @@ mod tests {
             write_index: false,
             exclude_uncalibrated_reads: false,
         }
-    }
-
-    #[test]
-    fn test_sample_coverage_err() {
-        // Without sample_bed
-        let args_without_sample = mock_calibrate_args(false, false);
-        let result = calibrate_by_sample_coverage(args_without_sample);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_standard_coverage_err() {
-        let test_args_with_sample = mock_calibrate_args(true, false);
-        let result = calibrate_by_standard_coverage(test_args_with_sample);
-        assert!(result.is_err());
     }
 
     #[test]
@@ -704,19 +688,36 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "TODO: add required mocks."]
     fn test_calibrate_by_sample_coverage() {
-        let args = mock_calibrate_args(true, true);
-        let result = calibrate_by_sample_coverage(args);
+        // Throw error if args don't provide sample
+        let args_without_sample = mock_calibrate_args(false, false);
+        let result = calibrate_by_sample_coverage(args_without_sample);
+        assert!(result.is_err());
+
+        // Working correctly with expected args
+        let args_expected = mock_calibrate_args(true, true);
+        let out_path = args_expected.output.clone().unwrap();
+
+        let result = calibrate_by_sample_coverage(args_expected);
         assert!(result.is_ok());
+
+        // Verify output file exists and has content
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
     }
 
     #[test]
     fn test_calibrate_by_standard_coverage() {
-        let args = mock_calibrate_args(false, true);
-        let out_path = args.output.clone().unwrap();
+        // Throw error if args contains sample
+        let args_with_sample = mock_calibrate_args(true, false);
+        let result = calibrate_by_standard_coverage(args_with_sample);
+        assert!(result.is_err());
 
-        let result = calibrate_by_standard_coverage(args);
+        // Working correctly with expected args
+        let args_expected = mock_calibrate_args(false, true);
+        let out_path = args_expected.output.clone().unwrap();
+
+        let result = calibrate_by_standard_coverage(args_expected);
         assert!(result.is_ok());
 
         // Verify output file exists and has content
