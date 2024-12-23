@@ -517,7 +517,11 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
 
 /// Calibrates the reads in a set of regions by randomly sampling reads from the sample data.
 ///
-/// The sample data is assumed to be a BED file with regions that have been sequenced. The sample data is used to determine the coverage in each window of the region. The coverage in the region is then adjusted to match the coverage in the sample data by randomly sampling reads that start in each window of the region. The number of reads to sample is determined by the coverage in the sample data. Both ends of paired-end reads are kept.
+/// The sample data is assumed to be a BED file with regions that have been sequenced. The sample
+/// data is used to determine the coverage in each window of the region. The coverage in the region
+/// is then adjusted to match the coverage in the sample data by randomly sampling reads that start
+/// in each window of the region. The number of reads to sample is determined by the coverage in the
+/// sample data. Both ends of paired-end reads are kept.
 ///
 /// # Arguments
 ///
@@ -529,7 +533,8 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
 ///
 /// # Errors
 ///
-/// This function does not return errors directly but may panic if there are issues with BAM file operations or if required regions are not found in the sample regions map.
+/// This function does not return errors directly but may panic if there are issues with BAM file
+/// operations or if required regions are not found in the sample regions map.
 fn calibrate_regions(
     bam: &mut bam::IndexedReader,
     out: &mut bam::Writer,
