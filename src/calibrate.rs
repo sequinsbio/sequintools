@@ -1,3 +1,58 @@
+//! Calibration module for sequencing data analysis.
+//!
+//! This module provides functionality for calibrating sequencing data based on coverage analysis.
+//! It supports two main calibration methods:
+//! - Standard coverage calibration: Applies a mean target coverage to all sequin regions
+//! - Sample coverage calibration: Calibrates based on sample-specific coverage patterns
+//!
+//! # Main Functions
+//!
+//! - [`calibrate`]: Main entry point for calibration operations
+//! - [`calibrate_by_standard_coverage`]: Performs standard coverage-based calibration
+//! - [`calibrate_by_sample_coverage`]: Performs sample-specific coverage calibration
+//! - [`mean_depth`]: Calculates mean depth for a given region
+//!
+//! # Types
+//!
+//! - [`DepthResult`]: Represents depth calculation results including histogram and statistics
+//! - [`CalibrateError`]: Custom error type for calibration operations
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use sequintools::CalibrateArgs;
+//! use sequintools::calibrate;
+//!
+//! let args = CalibrateArgs {
+//!     // ... configure arguments
+//! };
+//!
+//! match calibrate::calibrate(args) {
+//!     Ok(_) => println!("Calibration successful"),
+//!     Err(e) => eprintln!("Calibration failed: {}", e),
+//! }
+//! ```
+//!
+//! # Features
+//!
+//! - BAM file processing and indexing
+//! - Region-specific depth calculation
+//! - Coverage histogram generation
+//! - Statistical analysis of coverage data
+//! - Support for paired-end reads
+//! - Configurable mapping quality filters
+//!
+//! # Technical Details
+//!
+//! The module handles both standard and sample-based calibration methods:
+//! - Standard calibration applies a uniform coverage target
+//! - Sample-based calibration uses sliding windows to match coverage patterns
+//! - Both methods preserve read pairs and handle various read flags
+//!
+//! # Note
+//!
+//! Ensure input BAM files are properly indexed before calibration.
+//! The module assumes 0-based coordinates in BED files.
 use crate::region::{self, Region};
 use crate::CalibrateArgs;
 use anyhow::{Context, Result};
@@ -14,6 +69,57 @@ use std::io;
 use std::process::exit;
 use std::vec::Vec;
 
+/// Calibrates sequin coverage based on the provided arguments.
+///
+/// This function serves as the main entry point for calibration operations. It determines the
+/// appropriate calibration method (standard or sample-specific) based on the presence of a sample
+/// BED file in the arguments and delegates the calibration process to the corresponding function.
+///
+/// # Arguments
+///
+/// * `args` - [`CalibrateArgs`] containing:
+///   - `bed`: Path to BED file with regions to calibrate
+///   - `path`: Path to input BAM file
+///   - `output`: Optional output BAM path (uses stdout if None)
+///   - `sample_bed`: Optional path to sample BED file with regions to use for calibration
+///   - `fold_coverage`: Target coverage fold
+///   - `flank`: Number of bases to exclude from region edges
+///   - `seed`: Random seed for reproducible sampling
+///   - `write_index`: Whether to write BAM index
+///
+/// # Returns
+///
+/// Returns `Result<()>` which is:
+/// - `Ok(())` if calibration completed successfully
+/// - `Err(CalibrateError)` if an error occurs during calibration
+///
+/// # Errors
+///
+/// Will return error if:
+/// - Cannot open input BAM file
+/// - Cannot create output BAM file
+/// - Region processing or depth calculation fails
+///
+/// # Example
+///
+/// ```no_run
+/// use sequintools::CalibrateArgs;
+/// use sequintools::calibrate;
+///
+/// let args = CalibrateArgs {
+///     bed: "regions.bed".to_string(),
+///     path: "input.bam".to_string(),
+///     output: Some("output.bam".to_string()),
+///     sample_bed: None,
+///     fold_coverage: 30,
+///     // ... other fields
+/// };
+///
+/// match calibrate(args) {
+///     Ok(_) => println!("Calibration successful"),
+///     Err(e) => eprintln!("Calibration failed: {}", e),
+/// }
+/// ```
 pub fn calibrate(args: CalibrateArgs) -> Result<()> {
     let _ = match args.sample_bed {
         Some(_) => calibrate_by_sample_coverage(args),
@@ -22,8 +128,55 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
     Ok(())
 }
 
-// calibrate sequin coverage by applying a mean target coverage to all sequin
-// regions.
+/// Calibrates sequin coverage by applying a mean target coverage to all sequin regions.
+///
+/// This function performs standard coverage calibration by:
+/// 1. Processing each region in the input BED file
+/// 2. Calculating mean depth for each region
+/// 3. Randomly sampling reads to achieve the target coverage
+/// 4. Preserving read pairs in the output
+///
+/// # Arguments
+///
+/// * `args` - [`CalibrateArgs`] containing:
+///   - `bed`: Path to BED file with regions to calibrate
+///   - `path`: Path to input BAM file
+///   - `output`: Optional output BAM path (uses stdout if None)
+///   - `fold_coverage`: Target coverage fold
+///   - `flank`: Number of bases to exclude from region edges
+///   - `seed`: Random seed for reproducible sampling
+///   - `write_index`: Whether to write BAM index
+///
+/// # Returns
+///
+/// Returns `Result<()>` which is:
+/// - `Ok(())` if calibration completed successfully
+/// - `Err(CalibrateError)` if sample bed file is provided or other errors occur
+///
+/// # Errors
+///
+/// Will return error if:
+/// - Sample BED file is provided (incompatible with standard calibration)
+/// - Cannot open input BAM file
+/// - Cannot create output BAM file
+/// - Region processing or depth calculation fails
+///
+/// # Example
+///
+/// ```no_run
+/// use sequintools::CalibrateArgs;
+///
+/// let args = CalibrateArgs {
+///     bed: "regions.bed".to_string(),
+///     path: "input.bam".to_string(),
+///     output: Some("output.bam".to_string()),
+///     sample_bed: None,
+///     fold_coverage: 30,
+///     // ... other fields
+/// };
+///
+/// calibrate_by_standard_coverage(args)?;
+/// ```
 pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
     if args.sample_bed.is_some() {
         return Err(CalibrateError::new(
@@ -151,9 +304,47 @@ impl DepthResult {
     }
 }
 
-// Return the mean depth of a region from a BAM file. `flank` bases are removed
-// from the start and end of the region prior to depth calculation. The region
-// must use 0-based coordinates.
+/// Return the mean depth of a region from a BAM file. `flank` bases are removed
+/// from the start and end of the region prior to depth calculation. The region
+/// must use 0-based coordinates.
+///
+/// # Arguments
+///
+/// * `bam` - A mutable reference to an indexed BAM reader.
+/// * `region` - The region for which to calculate mean depth.
+/// * `flank` - Number of bases to exclude from the start and end of the region.
+/// * `min_mapq` - Minimum mapping quality for reads to be considered.
+///
+/// # Returns
+///
+/// Returns `Result<DepthResult>` which is:
+/// - `Ok(DepthResult)` if depth calculation completed successfully
+/// - `Err(anyhow::Error)` if an error occurs during depth calculation
+///
+/// # Errors
+///
+/// Will return error if:
+/// - Cannot fetch region from BAM file
+/// - Pileup operation fails
+///
+/// # Example
+///
+/// ```no_run
+/// use sequintools::Region;
+/// use sequintools::calibrate::mean_depth;
+/// use rust_htslib::bam;
+///
+/// let mut bam = bam::IndexedReader::from_path("input.bam").unwrap();
+/// let region = Region {
+///     contig: "chr1".to_string(),
+///     beg: 100,
+///     end: 200,
+///     name: "region1".to_string(),
+/// };
+///
+/// let depth_result = mean_depth(&mut bam, &region, 10, 20).unwrap();
+/// println!("Mean depth: {}", depth_result.mean);
+/// ```
 pub fn mean_depth(
     bam: &mut bam::IndexedReader,
     region: &Region,
@@ -203,11 +394,58 @@ pub fn mean_depth(
     })
 }
 
-//  What if we use a sliding window over the region and determine the depth of
-//  that window in the sample data. For the sequin data we randomly sample but
-//  only if the read starts in that window. We keep both ends of a pair. How do
-//  we handle secondary/supplementry/duplicate reads? We can experiment with
-//  different window sizes to get the best replication of the sample coverage.
+/// Calibrates sequin coverage based on sample-specific coverage patterns.
+///
+/// This function performs sample-specific coverage calibration by:
+/// 1. Loading sample regions from the provided BED file
+/// 2. Iterating over each contig in the BAM file
+/// 3. For each contig, if it is a calibrated contig, it calibrates the regions using sample data
+/// 4. If the contig is not calibrated and `exclude_uncalibrated_reads` is false, it processes all reads in the contig
+/// 5. Writes the calibrated reads to the output BAM file
+///
+/// # Arguments
+///
+/// * `args` - [`CalibrateArgs`] containing:
+///   - `bed`: Path to BED file with regions to calibrate
+///   - `path`: Path to input BAM file
+///   - `output`: Optional output BAM path (uses stdout if None)
+///   - `sample_bed`: Path to sample BED file with regions to use for calibration
+///   - `flank`: Number of bases to exclude from region edges
+///   - `seed`: Random seed for reproducible sampling
+///   - `window_size`: Size of the sliding window for coverage calculation
+///   - `min_mapq`: Minimum mapping quality for reads to be considered
+///   - `write_index`: Whether to write BAM index
+///   - `exclude_uncalibrated_reads`: Whether to exclude reads from uncalibrated contigs
+///
+/// # Returns
+///
+/// Returns `Result<()>` which is:
+/// - `Ok(())` if calibration completed successfully
+/// - `Err(CalibrateError)` if sample bed file is not provided or other errors occur
+///
+/// # Errors
+///
+/// Will return error if:
+/// - Sample BED file is not provided (required for sample-specific calibration)
+/// - Cannot open input BAM file
+/// - Cannot create output BAM file
+/// - Region processing or depth calculation fails
+///
+/// # Example
+///
+/// ```no_run
+/// use sequintools::CalibrateArgs;
+///
+/// let args = CalibrateArgs {
+///     bed: "regions.bed".to_string(),
+///     path: "input.bam".to_string(),
+///     output: Some("output.bam".to_string()),
+///     sample_bed: Some("sample.bed".to_string()),
+///     // ... other fields
+/// };
+///
+/// calibrate_by_sample_coverage(args)?;
+/// ```
 fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     // Should NOT enter this function if sample_bed in args is not provided.
     if args.sample_bed.is_none() {
@@ -277,6 +515,26 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     Ok(())
 }
 
+/// Calibrates the reads in a set of regions by randomly sampling reads from the sample data.
+///
+/// The sample data is assumed to be a BED file with regions that have been sequenced. The sample
+/// data is used to determine the coverage in each window of the region. The coverage in the region
+/// is then adjusted to match the coverage in the sample data by randomly sampling reads that start
+/// in each window of the region. The number of reads to sample is determined by the coverage in the
+/// sample data. Both ends of paired-end reads are kept.
+///
+/// # Arguments
+///
+/// * `bam` - A mutable reference to an indexed BAM reader.
+/// * `out` - A mutable reference to a BAM writer for the output.
+/// * `regions` - A vector of regions to calibrate.
+/// * `sample_regions_map` - A hashmap mapping region names to sample regions.
+/// * `args` - Calibration arguments containing various parameters.
+///
+/// # Errors
+///
+/// This function does not return errors directly but may panic if there are issues with BAM file
+/// operations or if required regions are not found in the sample regions map.
 fn calibrate_regions(
     bam: &mut bam::IndexedReader,
     out: &mut bam::Writer,
@@ -378,6 +636,23 @@ fn starts_in(bam: &mut bam::IndexedReader, region: &Region, min_mapq: u8) -> i64
     n
 }
 
+/// Calculates the number of read starts in sliding windows across a specified region.
+///
+/// This function iterates over the specified region in the BAM file, dividing it into sliding windows
+/// of a given size. For each window, it counts the number of reads that start within that window
+/// and returns these counts as a vector.
+///
+/// # Arguments
+///
+/// * `bam` - A mutable reference to an indexed BAM reader.
+/// * `region` - The region for which to calculate read starts.
+/// * `flank` - Number of bases to exclude from the start and end of the region.
+/// * `window_size` - The size of each sliding window.
+/// * `min_mapq` - Minimum mapping quality for reads to be considered.
+///
+/// # Returns
+///
+/// A vector of integers where each element represents the number of read starts in a corresponding window.
 pub fn window_starts(
     bam: &mut bam::IndexedReader,
     region: &Region,
