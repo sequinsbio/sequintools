@@ -454,7 +454,7 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
         )
         .into());
     }
-    let sample_bed = args.sample_bed.as_ref().unwrap();
+
     let cal_contigs = calibrated_contigs(&args.bed)?;
 
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
@@ -484,16 +484,18 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
             .map(|name| std::str::from_utf8(name).unwrap())
             .collect();
 
+        let mut sample_regions_map = HashMap::new();
+        let sample_regions = region::load_from_bed(&mut io::BufReader::new(File::open(
+            args.sample_bed.as_ref().unwrap(),
+        )?))?;
+        for region in &sample_regions {
+            sample_regions_map.insert(&region.name, region);
+        }
+
         for i in 0..hdr.target_count() {
             let contig = target_names[i as usize];
             if cal_contigs.contains(contig) {
-                let mut sample_regions_map = HashMap::new();
-                let sample_regions =
-                    region::load_from_bed(&mut io::BufReader::new(File::open(sample_bed)?))?;
-                for region in &sample_regions {
-                    sample_regions_map.insert(&region.name, region);
-                }
-                calibrate_regions(&mut bam, &mut out, &regions, sample_regions_map, &args);
+                calibrate_regions(&mut bam, &mut out, &regions, &sample_regions_map, &args);
             } else if !args.exclude_uncalibrated_reads {
                 eprintln!("Processing reads in {}", contig);
                 let beg = 1;
@@ -539,7 +541,7 @@ fn calibrate_regions(
     bam: &mut bam::IndexedReader,
     out: &mut bam::Writer,
     regions: &Vec<Region>,
-    sample_regions_map: HashMap<&String, &Region>,
+    sample_regions_map: &HashMap<&String, &Region>,
     args: &CalibrateArgs,
 ) {
     // iterate over sequin regions
@@ -948,7 +950,7 @@ mod tests {
             &mut bam,
             &mut temp_output,
             &regions,
-            sample_regions_map,
+            &sample_regions_map,
             &args,
         );
 
