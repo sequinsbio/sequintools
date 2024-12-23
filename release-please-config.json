@@ -1,6 +1,12 @@
 {
+  "bootstrap-sha": "714ba4bae52aa6cc7d4609cba93110d326cb71c5",
   "release-type": "rust",
   "packages": {
-    ".": {}
+    ".": {
+      "release-type": "rust",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "group-pull-reqest-title-pattern": "chore: release v${version} ${branch}"
+    }
   }
 }
