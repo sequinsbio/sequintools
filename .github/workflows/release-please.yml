@@ -1,0 +1,47 @@
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+name: release-please
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: googleapis/release-please-action@v4
+        id: release_main
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          manifest-file: .release-please-manifest.json
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        if: ${{ steps.release_main.outputs.release_created }}
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install system dependencies
+        if: ${{ steps.release_main.outputs.release_created }}
+        run: |
+          sudo apt-get install --yes cmake clang
+
+      - uses: Swatinem/rust-cache@v2
+        if: ${{ steps.release_main.outputs.release_created }}
+
+      - name: Publish sequintools
+        if: ${{ steps.release_main.outputs.release_created }}
+        uses: actions-rs/cargo@v1
+        with:
+          command: publish
+          args: --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
