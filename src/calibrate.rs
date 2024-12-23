@@ -77,8 +77,55 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
     Ok(())
 }
 
-// calibrate sequin coverage by applying a mean target coverage to all sequin
-// regions.
+/// Calibrates sequin coverage by applying a mean target coverage to all sequin regions.
+///
+/// This function performs standard coverage calibration by:
+/// 1. Processing each region in the input BED file
+/// 2. Calculating mean depth for each region
+/// 3. Randomly sampling reads to achieve the target coverage
+/// 4. Preserving read pairs in the output
+///
+/// # Arguments
+///
+/// * `args` - [`CalibrateArgs`] containing:
+///   - `bed`: Path to BED file with regions to calibrate
+///   - `path`: Path to input BAM file
+///   - `output`: Optional output BAM path (uses stdout if None)
+///   - `fold_coverage`: Target coverage fold
+///   - `flank`: Number of bases to exclude from region edges
+///   - `seed`: Random seed for reproducible sampling
+///   - `write_index`: Whether to write BAM index
+///
+/// # Returns
+///
+/// Returns `Result<()>` which is:
+/// - `Ok(())` if calibration completed successfully
+/// - `Err(CalibrateError)` if sample bed file is provided or other errors occur
+///
+/// # Errors
+///
+/// Will return error if:
+/// - Sample BED file is provided (incompatible with standard calibration)
+/// - Cannot open input BAM file
+/// - Cannot create output BAM file
+/// - Region processing or depth calculation fails
+///
+/// # Example
+///
+/// ```no_run
+/// use sequintools::CalibrateArgs;
+///
+/// let args = CalibrateArgs {
+///     bed: "regions.bed".to_string(),
+///     path: "input.bam".to_string(),
+///     output: Some("output.bam".to_string()),
+///     sample_bed: None,
+///     fold_coverage: 30,
+///     // ... other fields
+/// };
+///
+/// calibrate_by_standard_coverage(args)?;
+/// ```
 pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
     if args.sample_bed.is_some() {
         return Err(CalibrateError::new(
