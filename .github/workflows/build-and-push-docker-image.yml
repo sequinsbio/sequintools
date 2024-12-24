@@ -39,7 +39,6 @@ jobs:
         with:
           images: |
             ghcr.io/sequinsbio/sequintools
-            sequinsbio.azurecr.io/sequintools
           tags: |
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
@@ -52,13 +51,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to AzureCR
-        uses: docker/login-action@v3
-        with:
-          registry: sequinsbio.azurecr.io
-          username: ${{ secrets.AZ_CONTAINER_USERNAME }}
-          password: ${{ secrets.AZ_CONTAINER_PASSWORD }}
 
       - name: Build container
         uses: docker/build-push-action@v6
