@@ -7,7 +7,9 @@ on:
       "src/**",
       "Dockerfile",
       "Cargo.toml",
-      ".github/workflows/build-and-push-docker-image.yml"
+      ".github/workflows/build-and-push-docker-image.yml",
+      "!**.md",
+      "!docs/**"
     ]
     tags: [ "v*" ]
 
