@@ -48,13 +48,16 @@ existing codebase and documentation for consistency.
 
 2. Write clear and concise commit messages. We follow [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) format for commits:
    ```
-   <type>: <description>
+   <type>(optional scope): briefly describes what the commit does
 
-   [Additional details]
+   The body of the commit message can provide additional details.
+   It should be wrapped at 72 characters for readability.
    ```
+   The title is typically recommended to be 50 characters for better readability, with a maximum limit of 72 characters.
+   
    Examples:
    - `fix: resolve button alignment issue`
-   - `feat: add support for new endpoint`
+   - `feat(auth): add support for multi-factor authentication`
 
 3. Test your changes locally to ensure they work as expected.
 
