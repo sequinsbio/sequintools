@@ -57,7 +57,7 @@ existing codebase and documentation for consistency.
    
    Examples:
    - `fix: resolve button alignment issue`
-   - `feat: add support for new endpoint`
+   - `feat(auth): add support for multi-factor authentication`
 
 3. Test your changes locally to ensure they work as expected.
 
