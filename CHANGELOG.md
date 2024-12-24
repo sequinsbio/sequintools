@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/sequinsbio/sequintools/compare/v0.3.1...v0.3.2) (2024-12-24)
+
+
+### Bug Fixes
+
+* do not include component in the release tag ([#122](https://github.com/sequinsbio/sequintools/issues/122)) ([d1a2bd0](https://github.com/sequinsbio/sequintools/commit/d1a2bd05eb3b2e0b5412ee667a9690decfca0cb1))
+
 ## [0.3.1](https://github.com/sequinsbio/sequintools/compare/sequintools-v0.3.0...sequintools-v0.3.1) (2024-12-24)
 
 
