@@ -3,12 +3,12 @@
   "release-type": "rust",
   "include-component-in-tag": false,
   "include-v-in-tag": true,
+  "pull-request-title-pattern": "chore: release v${version} ${branch}",
   "packages": {
     ".": {
       "release-type": "rust",
       "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": true,
-      "group-pull-reqest-title-pattern": "chore: release v${version} ${branch}"
+      "bump-patch-for-minor-pre-major": true
     }
   }
 }
