@@ -1,0 +1,8 @@
+[ignore-by-author-name]
+# Match commits by author name (e.g. ignore dependabot commits)
+regex=dependabot
+ignore=all
+
+[ignore-by-title]
+regex=^chore: release .+$
+ignore=all
