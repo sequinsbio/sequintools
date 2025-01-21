@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.3](https://github.com/sequinsbio/sequintools/compare/v0.3.2...v0.3.3) (2025-01-21)
+
+
+### Features
+
+* allow docker image to be used by nextflow ([#130](https://github.com/sequinsbio/sequintools/issues/130)) ([2b2ab12](https://github.com/sequinsbio/sequintools/commit/2b2ab12017f456b176d98abb878843e89c3f620d)), closes [#129](https://github.com/sequinsbio/sequintools/issues/129)
+
+
+### Bug Fixes
+
+* **deps:** bump clap from 4.5.23 to 4.5.26 ([#127](https://github.com/sequinsbio/sequintools/issues/127)) ([8711063](https://github.com/sequinsbio/sequintools/commit/8711063d708dd2ed4aef3b2d85774e37d7720f40))
+
 ## [0.3.2](https://github.com/sequinsbio/sequintools/compare/v0.3.1...v0.3.2) (2024-12-24)
 
 
