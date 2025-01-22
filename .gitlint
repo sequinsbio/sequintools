@@ -1,0 +1,4 @@
+[ignore-by-author-name]
+# Match commits by author name (e.g. ignore dependabot commits)
+regex=dependabot|sequins-bot
+ignore=all
