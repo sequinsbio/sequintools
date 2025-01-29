@@ -769,7 +769,6 @@ impl DepthResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use approx::assert_relative_eq;
     use tempfile::NamedTempFile;
 
     const TEST_BAM_PATH: &str = "testdata/sim_R.bam";
@@ -913,7 +912,7 @@ mod tests {
             name: "test_region".to_owned(),
         };
         let result = mean_depth(&mut bam, &region, 0, 0, 100_000_000).unwrap();
-        assert_relative_eq!(result.mean().unwrap(), 11128.79, epsilon = 1e-2);
+        assert_eq!(result.max().unwrap(), 11444);
     }
 
     #[test]
@@ -926,7 +925,7 @@ mod tests {
             name: "test_region".to_owned(),
         };
         let result = mean_depth(&mut bam, &region, 0, 0, 1_000).unwrap();
-        assert_relative_eq!(result.mean().unwrap(), 975.94, epsilon = 1e-2);
+        assert_eq!(result.max().unwrap(), 1121);
     }
 
     #[test]
