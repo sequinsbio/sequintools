@@ -319,6 +319,7 @@ impl DepthResult {
 /// * `region` - The region for which to calculate mean depth.
 /// * `flank` - Number of bases to exclude from the start and end of the region.
 /// * `min_mapq` - Minimum mapping quality for reads to be considered.
+/// * `max_depth` - Maximum depth for pile
 ///
 /// # Returns
 ///
@@ -347,7 +348,7 @@ impl DepthResult {
 ///     name: "region1".to_string(),
 /// };
 ///
-/// let depth_result = mean_depth(&mut bam, &region, 10, 20).unwrap();
+/// let depth_result = mean_depth(&mut bam, &region, 10, 20, 8_000).unwrap();
 /// println!("Mean depth: {}", depth_result.mean);
 /// ```
 pub fn mean_depth(
