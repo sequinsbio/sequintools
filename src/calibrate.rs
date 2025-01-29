@@ -69,6 +69,11 @@ use std::io;
 use std::process::exit;
 use std::vec::Vec;
 
+// Defines the max depth for pileup operations. Previously this was not defined
+// in calls to `pileup` so this represents the default to make calls backward
+// compatible.
+const PILEUP_MAX_DEPTH: u32 = 8_000;
+
 /// Calibrates sequin coverage based on the provided arguments.
 ///
 /// This function serves as the main entry point for calibration operations. It determines the
@@ -206,7 +211,7 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         let coverage = args.fold_coverage as f64;
 
         for region in &regions {
-            let depth = mean_depth(&mut bam, region, args.flank, 10)?.mean;
+            let depth = mean_depth(&mut bam, region, args.flank, 10, PILEUP_MAX_DEPTH)?.mean;
             println!(
                 "{}:{}-{} {} {}",
                 region.contig,
@@ -314,6 +319,7 @@ impl DepthResult {
 /// * `region` - The region for which to calculate mean depth.
 /// * `flank` - Number of bases to exclude from the start and end of the region.
 /// * `min_mapq` - Minimum mapping quality for reads to be considered.
+/// * `max_depth` - Maximum depth for pile
 ///
 /// # Returns
 ///
@@ -342,7 +348,7 @@ impl DepthResult {
 ///     name: "region1".to_string(),
 /// };
 ///
-/// let depth_result = mean_depth(&mut bam, &region, 10, 20).unwrap();
+/// let depth_result = mean_depth(&mut bam, &region, 10, 20, 8_000).unwrap();
 /// println!("Mean depth: {}", depth_result.mean);
 /// ```
 pub fn mean_depth(
@@ -350,6 +356,7 @@ pub fn mean_depth(
     region: &Region,
     flank: i32,
     min_mapq: u8,
+    max_depth: u32,
 ) -> Result<DepthResult> {
     let beg: u32 = region.beg as u32 + flank as u32;
     let end: u32 = region.end as u32 - flank as u32;
@@ -363,7 +370,11 @@ pub fn mean_depth(
 
     let mut xs: HashMap<u32, u32> = std::collections::HashMap::new();
 
-    for p in bam.pileup() {
+    let mut pileups = bam.pileup();
+    pileups.set_max_depth(max_depth);
+
+    // for p in bam.pileup() {
+    for p in pileups {
         let pileup = p.with_context(|| "pileup failed".to_string())?;
         if pileup.pos() < beg || pileup.pos() > end - 1 {
             continue;
@@ -860,6 +871,7 @@ mod tests {
             },
             0,
             0,
+            PILEUP_MAX_DEPTH,
         );
         assert_eq!(result.unwrap().mean, 33.95);
     }
@@ -873,7 +885,9 @@ mod tests {
             end: 199,
             name: "reg2".to_owned(),
         };
-        let result = mean_depth(&mut bam, &region, 0, 0).unwrap().mean;
+        let result = mean_depth(&mut bam, &region, 0, 0, PILEUP_MAX_DEPTH)
+            .unwrap()
+            .mean;
         assert_eq!(result, 35.25);
     }
 
@@ -886,8 +900,36 @@ mod tests {
             end: 199,
             name: "reg2".to_owned(),
         };
-        let result = mean_depth(&mut bam, &region, 0, 10).unwrap().mean;
+        let result = mean_depth(&mut bam, &region, 0, 10, PILEUP_MAX_DEPTH)
+            .unwrap()
+            .mean;
         assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_mean_depth_increased_max_depth() {
+        let mut bam = bam::IndexedReader::from_path("testdata/bedcov_max_depth.bam").unwrap();
+        let region = Region {
+            contig: "chrQ_mirror".to_owned(),
+            beg: 500,
+            end: 800,
+            name: "test_region".to_owned(),
+        };
+        let result = mean_depth(&mut bam, &region, 0, 0, 100_000_000).unwrap();
+        assert_eq!(result.max().unwrap(), 11444);
+    }
+
+    #[test]
+    fn test_mean_depth_decreased_max_depth() {
+        let mut bam = bam::IndexedReader::from_path("testdata/bedcov_max_depth.bam").unwrap();
+        let region = Region {
+            contig: "chrQ_mirror".to_owned(),
+            beg: 500,
+            end: 800,
+            name: "test_region".to_owned(),
+        };
+        let result = mean_depth(&mut bam, &region, 0, 0, 1_000).unwrap();
+        assert_eq!(result.max().unwrap(), 1121);
     }
 
     #[test]

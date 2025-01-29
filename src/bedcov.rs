@@ -49,6 +49,7 @@ fn bedcov_report<W: Write>(
     bed_path: &str,
     min_mapq: u8,
     flank: i32,
+    max_depth: u32,
     dest: W,
 ) -> Result<()> {
     let mut bam = bam::IndexedReader::from_path(bam_path)?;
@@ -57,7 +58,7 @@ fn bedcov_report<W: Write>(
     let mut wtr = csv::Writer::from_writer(dest);
     wtr.write_record(REPORT_HEADER)?;
     for region in &regions {
-        let depth_result = mean_depth(&mut bam, region, flank, min_mapq)?;
+        let depth_result = mean_depth(&mut bam, region, flank, min_mapq, max_depth)?;
         let record = build_line_for_header(region, &depth_result)?;
         wtr.write_record(record)?;
     }
@@ -132,6 +133,7 @@ pub fn bedcov(args: BedcovArgs) -> Result<()> {
         &args.bed_path,
         args.min_mapq,
         args.flank,
+        args.max_depth,
         io::stdout(),
     )
 }
@@ -193,7 +195,7 @@ mod tests {
         let mut buffer = Vec::new();
         let bam_path = &get_test_path("bam");
         let bed_path = &get_test_path("bed");
-        let result = bedcov_report(bam_path, bed_path, 0, 0, &mut buffer);
+        let result = bedcov_report(bam_path, bed_path, 0, 0, 8_000, &mut buffer);
         assert!(result.is_ok());
 
         // Compare the report with the expected
@@ -211,6 +213,7 @@ mod tests {
             bed_path: get_test_path("bed"),
             min_mapq: 0,
             flank: 0,
+            max_depth: 8_000,
         };
         let result = bedcov(args);
         assert!(result.is_ok());
@@ -223,6 +226,7 @@ mod tests {
             bed_path: get_test_path("bed"),
             min_mapq: 0,
             flank: 0,
+            max_depth: 8_000,
         };
         let result = bedcov(args);
         assert!(result.is_err());
@@ -235,6 +239,7 @@ mod tests {
             bed_path: "wrong_path.bam".to_owned(),
             min_mapq: 0,
             flank: 0,
+            max_depth: 8_000,
         };
         let result = bedcov(args);
         assert!(result.is_err());

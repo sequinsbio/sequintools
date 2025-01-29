@@ -63,8 +63,13 @@ pub struct BedcovArgs {
     #[arg(short = 'Q', long = "min-MQ", default_value_t = 0)]
     min_mapq: u8,
 
+    /// Number of bases to omit from the start and end of each region.
     #[arg(short = 'f', long = "flank", default_value_t = 0)]
     flank: i32,
+
+    /// max per-file depth; avoids excessive memory usage
+    #[arg(short = 'd', long = "max-depth", default_value_t = 8_000)]
+    max_depth: u32,
 
     bed_path: String,
     bam_path: String,
