@@ -69,7 +69,10 @@ use std::io;
 use std::process::exit;
 use std::vec::Vec;
 
-const PILEUP_MIN_DEPTH: u32 = 8_000;
+// Defines the max depth for pileup operations. Previously this was not defined
+// in calls to `pileup` so this represents the default to make calls backward
+// compatible.
+const PILEUP_MAX_DEPTH: u32 = 8_000;
 
 /// Calibrates sequin coverage based on the provided arguments.
 ///
@@ -208,7 +211,7 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         let coverage = args.fold_coverage as f64;
 
         for region in &regions {
-            let depth = mean_depth(&mut bam, region, args.flank, 10, PILEUP_MIN_DEPTH)?.mean;
+            let depth = mean_depth(&mut bam, region, args.flank, 10, PILEUP_MAX_DEPTH)?.mean;
             println!(
                 "{}:{}-{} {} {}",
                 region.contig,
@@ -867,7 +870,7 @@ mod tests {
             },
             0,
             0,
-            PILEUP_MIN_DEPTH,
+            PILEUP_MAX_DEPTH,
         );
         assert_eq!(result.unwrap().mean, 33.95);
     }
@@ -881,7 +884,7 @@ mod tests {
             end: 199,
             name: "reg2".to_owned(),
         };
-        let result = mean_depth(&mut bam, &region, 0, 0, PILEUP_MIN_DEPTH)
+        let result = mean_depth(&mut bam, &region, 0, 0, PILEUP_MAX_DEPTH)
             .unwrap()
             .mean;
         assert_eq!(result, 35.25);
@@ -896,7 +899,7 @@ mod tests {
             end: 199,
             name: "reg2".to_owned(),
         };
-        let result = mean_depth(&mut bam, &region, 0, 10, PILEUP_MIN_DEPTH)
+        let result = mean_depth(&mut bam, &region, 0, 10, PILEUP_MAX_DEPTH)
             .unwrap()
             .mean;
         assert_eq!(result, 0.0);
