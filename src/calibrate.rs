@@ -69,6 +69,8 @@ use std::io;
 use std::process::exit;
 use std::vec::Vec;
 
+const PILEUP_MIN_DEPTH: u32 = 8_000;
+
 /// Calibrates sequin coverage based on the provided arguments.
 ///
 /// This function serves as the main entry point for calibration operations. It determines the
@@ -206,7 +208,7 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         let coverage = args.fold_coverage as f64;
 
         for region in &regions {
-            let depth = mean_depth(&mut bam, region, args.flank, 10)?.mean;
+            let depth = mean_depth(&mut bam, region, args.flank, 10, PILEUP_MIN_DEPTH)?.mean;
             println!(
                 "{}:{}-{} {} {}",
                 region.contig,
@@ -350,6 +352,7 @@ pub fn mean_depth(
     region: &Region,
     flank: i32,
     min_mapq: u8,
+    max_depth: u32,
 ) -> Result<DepthResult> {
     let beg: u32 = region.beg as u32 + flank as u32;
     let end: u32 = region.end as u32 - flank as u32;
@@ -363,7 +366,11 @@ pub fn mean_depth(
 
     let mut xs: HashMap<u32, u32> = std::collections::HashMap::new();
 
-    for p in bam.pileup() {
+    let mut pileups = bam.pileup();
+    pileups.set_max_depth(max_depth);
+
+    // for p in bam.pileup() {
+    for p in pileups {
         let pileup = p.with_context(|| "pileup failed".to_string())?;
         if pileup.pos() < beg || pileup.pos() > end - 1 {
             continue;
@@ -762,6 +769,7 @@ impl DepthResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::assert_relative_eq;
     use tempfile::NamedTempFile;
 
     const TEST_BAM_PATH: &str = "testdata/sim_R.bam";
@@ -860,6 +868,7 @@ mod tests {
             },
             0,
             0,
+            PILEUP_MIN_DEPTH,
         );
         assert_eq!(result.unwrap().mean, 33.95);
     }
@@ -873,7 +882,9 @@ mod tests {
             end: 199,
             name: "reg2".to_owned(),
         };
-        let result = mean_depth(&mut bam, &region, 0, 0).unwrap().mean;
+        let result = mean_depth(&mut bam, &region, 0, 0, PILEUP_MIN_DEPTH)
+            .unwrap()
+            .mean;
         assert_eq!(result, 35.25);
     }
 
@@ -886,8 +897,36 @@ mod tests {
             end: 199,
             name: "reg2".to_owned(),
         };
-        let result = mean_depth(&mut bam, &region, 0, 10).unwrap().mean;
+        let result = mean_depth(&mut bam, &region, 0, 10, PILEUP_MIN_DEPTH)
+            .unwrap()
+            .mean;
         assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_mean_depth_increased_max_depth() {
+        let mut bam = bam::IndexedReader::from_path("testdata/bedcov_max_depth.bam").unwrap();
+        let region = Region {
+            contig: "chrQ_mirror".to_owned(),
+            beg: 500,
+            end: 800,
+            name: "test_region".to_owned(),
+        };
+        let result = mean_depth(&mut bam, &region, 0, 0, 100_000_000).unwrap();
+        assert_relative_eq!(result.mean().unwrap(), 11128.79, epsilon = 1e-2);
+    }
+
+    #[test]
+    fn test_mean_depth_decreased_max_depth() {
+        let mut bam = bam::IndexedReader::from_path("testdata/bedcov_max_depth.bam").unwrap();
+        let region = Region {
+            contig: "chrQ_mirror".to_owned(),
+            beg: 500,
+            end: 800,
+            name: "test_region".to_owned(),
+        };
+        let result = mean_depth(&mut bam, &region, 0, 0, 1_000).unwrap();
+        assert_relative_eq!(result.mean().unwrap(), 975.94, epsilon = 1e-2);
     }
 
     #[test]
