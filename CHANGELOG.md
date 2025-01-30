@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/sequinsbio/sequintools/compare/v0.3.3...v0.4.0) (2025-01-30)
+
+
+### Features
+
+* allow setting max depth for bedcov ([#140](https://github.com/sequinsbio/sequintools/issues/140)) ([092e602](https://github.com/sequinsbio/sequintools/commit/092e602fc1b7227dd0396395d055ccf5241ef45c)), closes [#139](https://github.com/sequinsbio/sequintools/issues/139)
+
 ## [0.3.3](https://github.com/sequinsbio/sequintools/compare/v0.3.2...v0.3.3) (2025-01-21)
 
 
