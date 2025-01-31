@@ -67,7 +67,8 @@ pub struct BedcovArgs {
     #[arg(short = 'f', long = "flank", default_value_t = 0)]
     flank: i32,
 
-    /// max per-file depth; avoids excessive memory usage
+    /// max per-file depth; avoids excessive memory usage. Passing zero sets it
+    /// to the highest possible value, effectively removing the depth limit.
     #[arg(short = 'd', long = "max-depth", default_value_t = 8_000)]
     max_depth: u32,
 

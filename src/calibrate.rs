@@ -358,6 +358,15 @@ pub fn mean_depth(
     min_mapq: u8,
     max_depth: u32,
 ) -> Result<DepthResult> {
+    // If max_depth is 0, set it to the maximum possible value, effectively
+    // removing the depth limit. Note, internally htslib uses i32 for depth so
+    // we cannot exceed i32::MAX despite it being passed as u32.
+    let max_depth = if max_depth == 0 {
+        i32::MAX as u32
+    } else {
+        max_depth
+    };
+
     let beg: u32 = region.beg as u32 + flank as u32;
     let end: u32 = region.end as u32 - flank as u32;
     bam.fetch((region.contig.as_str(), beg, end))?;
@@ -930,6 +939,19 @@ mod tests {
         };
         let result = mean_depth(&mut bam, &region, 0, 0, 1_000).unwrap();
         assert_eq!(result.max().unwrap(), 1121);
+    }
+
+    #[test]
+    fn test_mean_depth_max_depth_0() {
+        let mut bam = bam::IndexedReader::from_path("testdata/bedcov_max_depth.bam").unwrap();
+        let region = Region {
+            contig: "chrQ_mirror".to_owned(),
+            beg: 500,
+            end: 800,
+            name: "test_region".to_owned(),
+        };
+        let result = mean_depth(&mut bam, &region, 0, 0, 0).unwrap();
+        assert_eq!(result.max().unwrap(), 11444);
     }
 
     #[test]
