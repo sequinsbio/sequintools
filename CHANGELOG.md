@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/sequinsbio/sequintools/compare/v0.4.0...v0.5.0) (2025-01-31)
+
+
+### Features
+
+* interpret bedcov max depth 0 as no limit ([#147](https://github.com/sequinsbio/sequintools/issues/147)) ([ddbe085](https://github.com/sequinsbio/sequintools/commit/ddbe085f45cb3181d33d93b6735ee0030682ef9d))
+
 ## [0.4.0](https://github.com/sequinsbio/sequintools/compare/v0.3.3...v0.4.0) (2025-01-30)
 
 
