@@ -233,7 +233,7 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
                 match pairs.get(&qname) {
                     Some(_) => out.write(&record).unwrap(),
                     _ => {
-                        let n = rng.gen::<f64>();
+                        let n = rng.random::<f64>();
                         let thres = coverage / depth;
                         if n <= thres {
                             // sequintools: thres = coverage / mean; if rand <= keep record
