@@ -69,6 +69,11 @@ use std::io;
 use std::process::exit;
 use std::vec::Vec;
 
+// Defines the maximum depth for pileup operations. htslib defines this as
+// 2_147_483_647 which is the maximum value of i32. The rust_htslib function
+// this is passed to requires an u32 hence the cast.
+const PILEUP_MAX_DEPTH: u32 = i32::MAX as u32;
+
 /// Calibrates sequin coverage based on the provided arguments.
 ///
 /// This function serves as the main entry point for calibration operations. It determines the
@@ -206,7 +211,7 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         let coverage = args.fold_coverage as f64;
 
         for region in &regions {
-            let depth = mean_depth(&mut bam, region, args.flank, 10, 0)?.mean;
+            let depth = mean_depth(&mut bam, region, args.flank, 10, PILEUP_MAX_DEPTH)?.mean;
             println!(
                 "{}:{}-{} {} {}",
                 region.contig,
@@ -875,7 +880,7 @@ mod tests {
             },
             0,
             0,
-            0,
+            PILEUP_MAX_DEPTH,
         );
         assert_eq!(result.unwrap().mean, 33.95);
     }
@@ -889,7 +894,9 @@ mod tests {
             end: 199,
             name: "reg2".to_owned(),
         };
-        let result = mean_depth(&mut bam, &region, 0, 0, 0).unwrap().mean;
+        let result = mean_depth(&mut bam, &region, 0, 0, PILEUP_MAX_DEPTH)
+            .unwrap()
+            .mean;
         assert_eq!(result, 35.25);
     }
 
@@ -902,7 +909,9 @@ mod tests {
             end: 199,
             name: "reg2".to_owned(),
         };
-        let result = mean_depth(&mut bam, &region, 0, 10, 0).unwrap().mean;
+        let result = mean_depth(&mut bam, &region, 0, 10, PILEUP_MAX_DEPTH)
+            .unwrap()
+            .mean;
         assert_eq!(result, 0.0);
     }
 
