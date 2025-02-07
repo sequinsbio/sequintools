@@ -69,10 +69,10 @@ use std::io;
 use std::process::exit;
 use std::vec::Vec;
 
-// Defines the max depth for pileup operations. Previously this was not defined
-// in calls to `pileup` so this represents the default to make calls backward
-// compatible.
-const PILEUP_MAX_DEPTH: u32 = 8_000;
+// Defines the maximum depth for pileup operations. htslib defines this as
+// 2_147_483_647 which is the maximum value of i32. The rust_htslib function
+// this is passed to requires an u32 hence the cast.
+const PILEUP_MAX_DEPTH: u32 = i32::MAX as u32;
 
 /// Calibrates sequin coverage based on the provided arguments.
 ///
@@ -319,7 +319,7 @@ impl DepthResult {
 /// * `region` - The region for which to calculate mean depth.
 /// * `flank` - Number of bases to exclude from the start and end of the region.
 /// * `min_mapq` - Minimum mapping quality for reads to be considered.
-/// * `max_depth` - Maximum depth for pile
+/// * `max_depth` - Maximum depth for pile. Setting this to 0 uses the maximum possible value, effectively removing the depth limit.
 ///
 /// # Returns
 ///
