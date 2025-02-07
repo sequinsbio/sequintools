@@ -314,7 +314,7 @@ impl DepthResult {
 /// * `region` - The region for which to calculate mean depth.
 /// * `flank` - Number of bases to exclude from the start and end of the region.
 /// * `min_mapq` - Minimum mapping quality for reads to be considered.
-/// * `max_depth` - Maximum depth for pile
+/// * `max_depth` - Maximum depth for pile. Setting this to 0 uses the maximum possible value, effectively removing the depth limit.
 ///
 /// # Returns
 ///
