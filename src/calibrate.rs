@@ -198,58 +198,130 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
             exit(1);
         }
     };
-    {
-        let header = bam::Header::from_template(bam.header());
-        let mut out = match &args.output {
-            Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
-            None => bam::Writer::from_stdout(&header, bam::Format::Bam)?,
-        };
+    let header = bam::Header::from_template(bam.header());
+    let mut out = match &args.output {
+        Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
+        None => bam::Writer::from_stdout(&header, bam::Format::Bam)?,
+    };
 
-        let mut rng = Pcg32::seed_from_u64(args.seed);
+    // This assumes that the decoy chromosome is the last one in the BAM file.
+    // If there are multiple decoy chromosomes, the behavior is not well
+    // defined.
 
-        let mut pairs = HashMap::new();
-        let coverage = args.fold_coverage as f64;
+    if !args.exclude_uncalibrated_reads {
+        copy_uncalibrated_contigs(&mut bam, &mut out, &regions)?;
+    }
 
-        for region in &regions {
-            let depth = mean_depth(&mut bam, region, args.flank, 10, PILEUP_MAX_DEPTH)?.mean;
-            println!(
-                "{}:{}-{} {} {}",
-                region.contig,
-                region.beg,
-                region.end,
-                depth,
-                depth * (coverage / depth)
-            );
+    // Calibrate sequin regions
+    calibrate_regions_by_standard_coverage(
+        &mut bam,
+        &mut out,
+        &regions,
+        args.fold_coverage as u64,
+        args.flank as u64,
+        args.seed,
+    )?;
 
-            let beg = region.beg + args.flank as u64;
-            let end = region.end - args.flank as u64;
+    if !args.exclude_uncalibrated_reads {
+        copy_unmapped_reads(&mut bam, &mut out)?;
+    }
 
-            bam.fetch((&region.contig, beg, end)).unwrap();
+    if args.write_index {
+        if let Some(path) = &args.output {
+            bam::index::build(path, None, bam::index::Type::Bai, 1).unwrap();
+        }
+    }
+    Ok(())
+}
 
-            for r in bam.records() {
-                let record = r.unwrap();
-                let qname = String::from_utf8(record.qname().to_vec()).unwrap();
+fn copy_uncalibrated_contigs(
+    bam: &mut bam::IndexedReader,
+    out: &mut bam::Writer,
+    regions: &[Region],
+) -> Result<()> {
+    let hdr = bam.header().clone();
+    let calibrated_contigs = regions
+        .iter()
+        .map(|r| r.contig.clone())
+        .collect::<HashSet<String>>();
+    let calibrated_tids = (0..hdr.target_count())
+        .filter(|tid| {
+            calibrated_contigs.contains(&String::from_utf8_lossy(hdr.tid2name(*tid)).into_owned())
+        })
+        .map(|tid| tid as i32)
+        .collect::<Vec<i32>>();
 
-                match pairs.get(&qname) {
-                    Some(_) => out.write(&record).unwrap(),
-                    _ => {
-                        let n = rng.random::<f64>();
-                        let thres = coverage / depth;
-                        if n <= thres {
-                            // sequintools: thres = coverage / mean; if rand <= keep record
-                            // need to ensure we keep both reads of a pair
-                            out.write(&record).unwrap();
-                            pairs.insert(qname, true);
-                        }
+    eprintln!("Copying uncalibrated reads");
+    for tid in 0..hdr.target_count() {
+        if calibrated_tids.contains(&(tid as i32)) {
+            continue;
+        }
+        bam.fetch(tid)?;
+        for result in bam.records() {
+            let record = result?;
+            if !calibrated_tids.contains(&record.tid()) {
+                out.write(&record)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn calibrate_regions_by_standard_coverage(
+    bam: &mut bam::IndexedReader,
+    out: &mut bam::Writer,
+    regions: &[Region],
+    fold_coverage: u64,
+    flank: u64,
+    seed: u64,
+) -> Result<()> {
+    // Calibrate sequin regions
+    let mut rng = Pcg32::seed_from_u64(seed);
+    let mut pairs = HashMap::new();
+    let coverage = fold_coverage as f64;
+    for region in regions {
+        let depth = mean_depth(bam, region, flank as i32, 10, PILEUP_MAX_DEPTH)?.mean;
+        println!(
+            "{}:{}-{} {} {}",
+            region.contig,
+            region.beg,
+            region.end,
+            depth,
+            depth * (coverage / depth)
+        );
+
+        let beg = region.beg + flank;
+        let end = region.end - flank;
+
+        bam.fetch((&region.contig, beg, end))?;
+
+        for r in bam.records() {
+            let record = r?;
+            let qname = String::from_utf8(record.qname().to_vec())?;
+
+            match pairs.get(&qname) {
+                Some(_) => out.write(&record)?,
+                _ => {
+                    let n = rng.random::<f64>();
+                    let thres = coverage / depth;
+                    if n <= thres {
+                        // sequintools: thres = coverage / mean; if rand <= keep record
+                        // need to ensure we keep both reads of a pair
+                        out.write(&record)?;
+                        pairs.insert(qname, true);
                     }
                 }
             }
         }
     }
-    if args.write_index {
-        if let Some(path) = &args.output {
-            bam::index::build(path, None, bam::index::Type::Bai, 1).unwrap();
-        }
+    Ok(())
+}
+
+fn copy_unmapped_reads(bam: &mut bam::IndexedReader, out: &mut bam::Writer) -> Result<()> {
+    bam.fetch("*")?;
+    for result in bam.records() {
+        let record = result?;
+        out.write(&record)?;
     }
     Ok(())
 }
