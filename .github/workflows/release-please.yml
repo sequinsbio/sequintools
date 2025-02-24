@@ -1,7 +1,7 @@
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    # Time is in UTC, this should run every Wednesday at 06:00 Sydney time
+    - cron: '0 19 * * 2'
   workflow_dispatch:
 
 name: release-please
