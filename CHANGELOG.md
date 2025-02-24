@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.2](https://github.com/sequinsbio/sequintools/compare/v0.5.1...v0.5.2) (2025-02-24)
+
+
+### Bug Fixes
+
+* **deps:** bump anyhow from 1.0.95 to 1.0.96 ([#162](https://github.com/sequinsbio/sequintools/issues/162)) ([89f60f5](https://github.com/sequinsbio/sequintools/commit/89f60f5376e006c9ad7c77464c14de6b0eb2437c))
+* **deps:** bump clap from 4.5.28 to 4.5.29 ([#159](https://github.com/sequinsbio/sequintools/issues/159)) ([fbeb232](https://github.com/sequinsbio/sequintools/commit/fbeb23259072b935a70548e17c5eb4ed8d20613f))
+* **deps:** bump clap from 4.5.29 to 4.5.30 ([#161](https://github.com/sequinsbio/sequintools/issues/161)) ([ffa5ef7](https://github.com/sequinsbio/sequintools/commit/ffa5ef7676d4a5b4d2ef88c6ee8f653189607f66))
+* **deps:** bump tempfile from 3.16.0 to 3.17.0 ([#158](https://github.com/sequinsbio/sequintools/issues/158)) ([aeaba36](https://github.com/sequinsbio/sequintools/commit/aeaba36311ff1ae4615212caeddbe48af7e127e8))
+* **deps:** bump tempfile from 3.17.0 to 3.17.1 ([#163](https://github.com/sequinsbio/sequintools/issues/163)) ([cf841bc](https://github.com/sequinsbio/sequintools/commit/cf841bc7bc6e3b4abf85c05c70d5e1b3d8f65db4))
+
 ## [0.5.1](https://github.com/sequinsbio/sequintools/compare/v0.5.0...v0.5.1) (2025-02-10)
 
 
