@@ -13,7 +13,7 @@ name = "sequintools"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4.5.32", features = ["derive"] }
+clap = { version = "4.5.34", features = ["derive"] }
 rand = "0.9.0"
 rand_pcg = "0.9.0"
 # When uprevving htslib, check if we can remove the advisory ignore in the
