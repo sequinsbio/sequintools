@@ -58,7 +58,7 @@ use crate::CalibrateArgs;
 use anyhow::{Context, Result};
 use rand::seq::IteratorRandom;
 use rand::{Rng, SeedableRng};
-use rand_pcg::Pcg32;
+use rand_pcg::{Lcg64Xsh32, Pcg32};
 use rust_htslib::{bam, bam::Read};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -290,31 +290,47 @@ fn calibrate_regions_by_standard_coverage(
             depth * (coverage / depth)
         );
 
-        let beg = region.beg + flank;
-        let end = region.end - flank;
+        let beg = region.beg;
+        let end = region.end;
+
+        let threshold = coverage / depth;
 
         bam.fetch((&region.contig, beg, end))?;
 
         for r in bam.records() {
             let record = r?;
-            let qname = String::from_utf8(record.qname().to_vec())?;
-
-            match pairs.get(&qname) {
-                Some(_) => out.write(&record)?,
-                _ => {
-                    let n = rng.random::<f64>();
-                    let thres = coverage / depth;
-                    if n <= thres {
-                        // sequintools: thres = coverage / mean; if rand <= keep record
-                        // need to ensure we keep both reads of a pair
-                        out.write(&record)?;
-                        pairs.insert(qname, true);
-                    }
-                }
+            if subsample(&record, &mut pairs, threshold, &mut rng) {
+                out.write(&record)?;
             }
         }
     }
     Ok(())
+}
+
+fn subsample(
+    record: &bam::Record,
+    hash: &mut HashMap<String, bool>,
+    threshold: f64,
+    rng: &mut Lcg64Xsh32,
+) -> bool {
+    let qname = String::from_utf8(record.qname().to_vec()).unwrap();
+    match hash.get(&qname) {
+        Some(_) => return true,
+        None => {
+            if record.pos() > record.mpos() {
+                // We've already considered the mate, and didn't keep it. We
+                // can't keep this read as it will create a singleton.
+                return false;
+            }
+        }
+    };
+    let rand = rng.random::<f64>();
+    if rand <= threshold {
+        hash.insert(qname, true);
+        true
+    } else {
+        false
+    }
 }
 
 fn copy_unmapped_reads(bam: &mut bam::IndexedReader, out: &mut bam::Writer) -> Result<()> {
