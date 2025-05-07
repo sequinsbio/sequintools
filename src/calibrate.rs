@@ -1155,4 +1155,27 @@ mod tests {
 
         // TODO: check the output BAM
     }
+
+    #[test]
+    fn test_subsample() {
+        let mut rng = Pcg32::seed_from_u64(42);
+        let mut hash = HashMap::new();
+        let mut record = bam::Record::new();
+        record.set_qname(b"read1");
+        record.set_pos(100);
+        record.set_mpos(200);
+
+        let result = subsample(&record, &mut hash, 1.0, &mut rng);
+        assert!(result);
+
+        // Test with a different threshold
+        let result = subsample(&record, &mut hash, 0.0, &mut rng);
+        assert!(result);
+
+        let mut hash = HashMap::new();
+        record.set_pos(200);
+        record.set_mpos(100);
+        let result = subsample(&record, &mut hash, 1.0, &mut rng);
+        assert!(!result);
+    }
 }
