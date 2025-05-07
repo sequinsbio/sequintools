@@ -1168,14 +1168,50 @@ mod tests {
         let result = subsample(&record, &mut hash, 1.0, &mut rng);
         assert!(result);
 
-        // Test with a different threshold
+        // Test with key added by first subsample
         let result = subsample(&record, &mut hash, 0.0, &mut rng);
         assert!(result);
+    }
 
+    #[test]
+    fn test_subsample_reject_read() {
+        let mut rng = Pcg32::seed_from_u64(42);
         let mut hash = HashMap::new();
+        let mut record = bam::Record::new();
+        record.set_qname(b"read1");
+        record.set_pos(100);
+        record.set_mpos(200);
+
+        // Test with a different threshold
+        let result = subsample(&record, &mut hash, 0.0, &mut rng);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_subsample_mate_before_read() {
+        let mut rng = Pcg32::seed_from_u64(42);
+        let mut hash = HashMap::new();
+        let mut record = bam::Record::new();
+        record.set_qname(b"read1");
         record.set_pos(200);
         record.set_mpos(100);
         let result = subsample(&record, &mut hash, 1.0, &mut rng);
         assert!(!result);
+    }
+
+    #[test]
+    fn test_subsample_read_in_hash() {
+        let mut rng = Pcg32::seed_from_u64(42);
+
+        let mut hash = HashMap::new();
+        hash.insert("read1".to_string(), true);
+
+        let mut record = bam::Record::new();
+        record.set_qname(b"read1");
+        record.set_pos(100);
+        record.set_mpos(200);
+
+        let result = subsample(&record, &mut hash, 1.0, &mut rng);
+        assert!(result);
     }
 }
