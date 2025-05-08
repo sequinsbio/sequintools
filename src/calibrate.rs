@@ -58,7 +58,7 @@ use crate::CalibrateArgs;
 use anyhow::{Context, Result};
 use rand::seq::IteratorRandom;
 use rand::{Rng, SeedableRng};
-use rand_pcg::{Lcg64Xsh32, Pcg32};
+use rand_pcg::Pcg32;
 use rust_htslib::{bam, bam::Read};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -311,7 +311,7 @@ fn subsample(
     record: &bam::Record,
     hash: &mut HashMap<String, bool>,
     threshold: f64,
-    rng: &mut Lcg64Xsh32,
+    rng: &mut Pcg32,
 ) -> bool {
     let qname = String::from_utf8(record.qname().to_vec()).unwrap();
     match hash.get(&qname) {
