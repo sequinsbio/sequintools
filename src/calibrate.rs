@@ -290,31 +290,47 @@ fn calibrate_regions_by_standard_coverage(
             depth * (coverage / depth)
         );
 
-        let beg = region.beg + flank;
-        let end = region.end - flank;
+        let beg = region.beg;
+        let end = region.end;
+
+        let threshold = coverage / depth;
 
         bam.fetch((&region.contig, beg, end))?;
 
         for r in bam.records() {
             let record = r?;
-            let qname = String::from_utf8(record.qname().to_vec())?;
-
-            match pairs.get(&qname) {
-                Some(_) => out.write(&record)?,
-                _ => {
-                    let n = rng.random::<f64>();
-                    let thres = coverage / depth;
-                    if n <= thres {
-                        // sequintools: thres = coverage / mean; if rand <= keep record
-                        // need to ensure we keep both reads of a pair
-                        out.write(&record)?;
-                        pairs.insert(qname, true);
-                    }
-                }
+            if subsample(&record, &mut pairs, threshold, &mut rng) {
+                out.write(&record)?;
             }
         }
     }
     Ok(())
+}
+
+fn subsample(
+    record: &bam::Record,
+    hash: &mut HashMap<String, bool>,
+    threshold: f64,
+    rng: &mut Pcg32,
+) -> bool {
+    let qname = String::from_utf8(record.qname().to_vec()).unwrap();
+    match hash.get(&qname) {
+        Some(_) => return true,
+        None => {
+            if record.pos() > record.mpos() {
+                // We've already considered the mate, and didn't keep it. We
+                // can't keep this read as it will create a singleton.
+                return false;
+            }
+        }
+    };
+    let rand = rng.random::<f64>();
+    if rand <= threshold {
+        hash.insert(qname, true);
+        true
+    } else {
+        false
+    }
 }
 
 fn copy_unmapped_reads(bam: &mut bam::IndexedReader, out: &mut bam::Writer) -> Result<()> {
@@ -1138,5 +1154,64 @@ mod tests {
         assert!(metadata.len() > 0, "Output BAM file should not be empty");
 
         // TODO: check the output BAM
+    }
+
+    #[test]
+    fn test_subsample() {
+        let mut rng = Pcg32::seed_from_u64(42);
+        let mut hash = HashMap::new();
+        let mut record = bam::Record::new();
+        record.set_qname(b"read1");
+        record.set_pos(100);
+        record.set_mpos(200);
+
+        let result = subsample(&record, &mut hash, 1.0, &mut rng);
+        assert!(result);
+
+        // Test with key added by first subsample
+        let result = subsample(&record, &mut hash, 0.0, &mut rng);
+        assert!(result);
+    }
+
+    #[test]
+    fn test_subsample_reject_read() {
+        let mut rng = Pcg32::seed_from_u64(42);
+        let mut hash = HashMap::new();
+        let mut record = bam::Record::new();
+        record.set_qname(b"read1");
+        record.set_pos(100);
+        record.set_mpos(200);
+
+        // Test with a different threshold
+        let result = subsample(&record, &mut hash, 0.0, &mut rng);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_subsample_mate_before_read() {
+        let mut rng = Pcg32::seed_from_u64(42);
+        let mut hash = HashMap::new();
+        let mut record = bam::Record::new();
+        record.set_qname(b"read1");
+        record.set_pos(200);
+        record.set_mpos(100);
+        let result = subsample(&record, &mut hash, 1.0, &mut rng);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_subsample_read_in_hash() {
+        let mut rng = Pcg32::seed_from_u64(42);
+
+        let mut hash = HashMap::new();
+        hash.insert("read1".to_string(), true);
+
+        let mut record = bam::Record::new();
+        record.set_qname(b"read1");
+        record.set_pos(100);
+        record.set_mpos(200);
+
+        let result = subsample(&record, &mut hash, 1.0, &mut rng);
+        assert!(result);
     }
 }
