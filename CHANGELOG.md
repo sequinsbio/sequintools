@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.6.0](https://github.com/sequinsbio/sequintools/compare/v0.5.4...v0.6.0) (2025-05-08)
+
+
+### Features
+
+* adjust calibration algorithm for standard coverage ([#185](https://github.com/sequinsbio/sequintools/issues/185)) ([bdded1c](https://github.com/sequinsbio/sequintools/commit/bdded1ca76bb1ba9ef548c7fff595117f98d7477))
+
+
+### Bug Fixes
+
+* **deps:** bump anyhow from 1.0.97 to 1.0.98 ([#177](https://github.com/sequinsbio/sequintools/issues/177)) ([2a5cfd0](https://github.com/sequinsbio/sequintools/commit/2a5cfd032b885a482fb0c89b604ad7d4df890b03))
+* **deps:** bump clap from 4.5.34 to 4.5.36 ([#178](https://github.com/sequinsbio/sequintools/issues/178)) ([002b534](https://github.com/sequinsbio/sequintools/commit/002b534954f0ce8db1136a8facbc33979d1b59a4))
+* **deps:** bump clap from 4.5.36 to 4.5.37 ([#182](https://github.com/sequinsbio/sequintools/issues/182)) ([335850c](https://github.com/sequinsbio/sequintools/commit/335850c0bf36267445abed81c96ad763d1a73fda))
+* **deps:** bump rand from 0.9.0 to 0.9.1 ([#181](https://github.com/sequinsbio/sequintools/issues/181)) ([5c095c8](https://github.com/sequinsbio/sequintools/commit/5c095c892fa5729d6ee70c812aaa9f8ee2818383))
+
 ## [0.5.4](https://github.com/sequinsbio/sequintools/compare/v0.5.3...v0.5.4) (2025-04-04)
 
 
