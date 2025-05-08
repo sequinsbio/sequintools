@@ -1039,6 +1039,8 @@ mod tests {
             min_mapq: 0,
             write_index: false,
             exclude_uncalibrated_reads: false,
+            uniform_coverage: false,
+            bin_size: 100,
         }
     }
 
