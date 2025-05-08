@@ -128,7 +128,10 @@ const PILEUP_MAX_DEPTH: u32 = i32::MAX as u32;
 pub fn calibrate(args: CalibrateArgs) -> Result<()> {
     let _ = match args.sample_bed {
         Some(_) => calibrate_by_sample_coverage(args),
-        None => calibrate_by_standard_coverage(args),
+        None => match args.uniform_coverage {
+            true => calibrate_regions_by_uniform_coverage_wrapper(args),
+            false => calibrate_by_standard_coverage(args),
+        },
     };
     Ok(())
 }
@@ -837,6 +840,155 @@ fn calibrated_contigs(path: &str) -> Result<HashSet<String>> {
         contigs.insert(region.contig.to_owned());
     }
     Ok(contigs)
+}
+
+fn calibrate_regions_by_uniform_coverage_wrapper(args: CalibrateArgs) -> Result<()> {
+    let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
+    let mut bam = match bam::IndexedReader::from_path(&args.path) {
+        Ok(r) => r,
+        Err(err) => {
+            eprintln!("unable to open input BAM: {}", err);
+            exit(1);
+        }
+    };
+    let header = bam::Header::from_template(bam.header());
+    let mut out = match &args.output {
+        Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
+        None => bam::Writer::from_stdout(&header, bam::Format::Bam)?,
+    };
+
+    calibrate_regions_by_uniform_coverage(
+        &mut bam,
+        &mut out,
+        &regions,
+        args.fold_coverage as u64,
+        args.flank as u64,
+        args.bin_size,
+        args.seed,
+    )?;
+    Ok(())
+}
+
+/// Calibrates sequin coverage based on uniform coverage across specified regions.
+fn calibrate_regions_by_uniform_coverage(
+    bam: &mut bam::IndexedReader,
+    out: &mut bam::Writer,
+    regions: &[Region],
+    fold_coverage: u64,
+    flank: u64,
+    bin_size: u64,
+    seed: u64,
+) -> Result<()> {
+    let mut rng = Pcg32::seed_from_u64(seed);
+    let target_coverage = fold_coverage as f64;
+
+    for region in regions {
+        println!(
+            "Processing region: {}:{}-{}",
+            region.contig, region.beg, region.end
+        );
+
+        let effective_beg = region.beg + flank;
+        let effective_end = region.end - flank;
+        let region_length = effective_end - effective_beg;
+
+        // 1. First pass: Create fine-grained coverage map
+        let num_bins = ((region_length as f64) / (bin_size as f64)).ceil() as usize;
+        let mut position_coverage = vec![0u32; region_length as usize];
+        bam.fetch((region.contig.as_str(), effective_beg, effective_end))?;
+        let mut pileups = bam.pileup();
+        pileups.set_max_depth(PILEUP_MAX_DEPTH);
+        for p in pileups {
+            let pileup = p.with_context(|| "pileup failed".to_string())?;
+            let pos = pileup.pos() as u64;
+            if pos < effective_beg || pos >= effective_end {
+                continue;
+            }
+            let depth = pileup
+                .alignments()
+                .filter(|aln| {
+                    let record = aln.record();
+                    !record.is_secondary()
+                        && !record.is_supplementary()
+                        && !record.is_duplicate()
+                        && !record.is_quality_check_failed()
+                })
+                .count() as u32;
+            position_coverage[(pos - effective_beg) as usize] = depth;
+        }
+
+        // 2. Calculate per-bin average coverage
+        let mut bin_coverages = Vec::with_capacity(num_bins);
+        for i in 0..num_bins {
+            let bin_start = i * bin_size as usize;
+            let bin_end = std::cmp::min(bin_start + bin_size as usize, region_length as usize);
+            let bin_coverage = position_coverage[bin_start..bin_end].iter().sum::<u32>() as f64
+                / (bin_end - bin_start) as f64;
+            bin_coverages.push(bin_coverage);
+            println!(
+                "\tBin {}: positions {}-{}, coverage {:.2}",
+                i,
+                bin_start + effective_beg as usize,
+                bin_end + effective_beg as usize,
+                bin_coverage
+            );
+        }
+
+        // 3. Second pass: Sample reads base on position-specific coverage
+        let mut read_pairs = HashMap::new();
+
+        bam.fetch((region.contig.as_str(), effective_beg, effective_end))?;
+        for r in bam.records() {
+            let record = r?;
+            let record_pos = record.pos() as u64;
+
+            if record_pos < effective_beg || record_pos >= effective_end {
+                continue;
+            }
+            let bin_idx = ((record_pos - effective_beg) as usize) / bin_size as usize;
+            if bin_idx >= bin_coverages.len() {
+                continue; // shouldn't happen...
+            }
+            let bin_coverage = bin_coverages[bin_idx];
+            if bin_coverage <= 0.01 {
+                // Avoid division by zero or very small numbers
+                continue;
+            }
+            let threshold = target_coverage / bin_coverage;
+
+            if uniform_subsample(
+                &record,
+                &mut read_pairs,
+                threshold,
+                bin_idx as u32,
+                &mut rng,
+            )? {
+                out.write(&record)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn uniform_subsample(
+    record: &bam::Record,
+    pair_decisions: &mut HashMap<String, (bool, u32)>,
+    threshold: f64,
+    bin_idx: u32,
+    rng: &mut impl Rng,
+) -> Result<bool> {
+    let qname = String::from_utf8(record.qname().to_vec())?;
+    if let Some((keep, _)) = pair_decisions.get(&qname) {
+        return Ok(*keep);
+    }
+    if record.is_paired() && record.pos() > record.mpos() {
+        let keep = rng.random::<f64>() <= threshold;
+        pair_decisions.insert(qname, (keep, bin_idx));
+        return Ok(keep);
+    }
+    let keep = rng.random::<f64>() <= threshold;
+    pair_decisions.insert(qname, (keep, bin_idx));
+    Ok(keep)
 }
 
 #[cfg(test)]

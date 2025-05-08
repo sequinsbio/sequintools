@@ -46,6 +46,13 @@ pub struct CalibrateArgs {
     #[arg(short = 'S', long = "sample-bed")]
     sample_bed: Option<String>,
 
+    /// Use uniform coverage for calibration
+    #[arg(long, default_value_t = false)]
+    uniform_coverage: bool,
+
+    #[arg(long, default_value_t = 100)]
+    bin_size: u64,
+
     /// BED file specifying regions in which alignment coverage is calibrated.
     #[arg(short, long)]
     bed: String,
