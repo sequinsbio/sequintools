@@ -3,6 +3,12 @@ on:
     # Time is in UTC, this should run every Wednesday at 06:00 Sydney time
     - cron: '0 19 * * 2'
   workflow_dispatch:
+  push:
+      branches:
+        - main
+      paths:
+        - "release-please-config.json"
+        - ".release-please-manifest.json"
 
 name: release-please
 
