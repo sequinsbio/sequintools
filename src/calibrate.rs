@@ -59,6 +59,7 @@ use anyhow::{Context, Result};
 use rand::seq::IteratorRandom;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
+use rust_htslib::bam::{IndexedReader, Writer};
 use rust_htslib::{bam, bam::Read};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -126,14 +127,20 @@ const PILEUP_MAX_DEPTH: u32 = i32::MAX as u32;
 /// }
 /// ```
 pub fn calibrate(args: CalibrateArgs) -> Result<()> {
-    let _ = match args.sample_bed {
-        Some(_) => calibrate_by_sample_coverage(args),
-        None => calibrate_by_standard_coverage(args),
-    };
+    if !args.experimental {
+        calibrate_by_standard_coverage(args)?;
+    } else {
+        calibrate_by_sample_coverage(args)?;
+    }
     Ok(())
 }
 
-/// Calibrates sequin coverage by applying a mean target coverage to all sequin regions.
+/// Calibrates sequin coverage by applying a mean target coverage to all sequin
+/// regions.
+///
+/// The target coverage is either obtained from the mean coverage of the
+/// corresponding region in the sample data (if `args.sample_bed` is not None),
+/// or using a fixed coverage (taken from `args.fold_coverage`).
 ///
 /// This function performs standard coverage calibration by:
 /// 1. Processing each region in the input BED file
@@ -183,14 +190,25 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
 /// calibrate_by_standard_coverage(args)?;
 /// ```
 pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
-    if args.sample_bed.is_some() {
-        return Err(CalibrateError::new(
-            "Cannot use standard coverage calibration when sample bed file is provided",
-        )
-        .into());
-    }
-
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
+
+    let sample_regions: &Option<HashMap<String, Region>> = match args.sample_bed.as_ref() {
+        Some(path) => {
+            let file = File::open(path)
+                .with_context(|| format!("Failed to open sample BED file: '{}'", path))?;
+            let mut buf = io::BufReader::new(file);
+            let regions = region::load_from_bed(&mut buf).with_context(|| {
+                format!("Failed to load regions from sample BED file: '{}'", path)
+            })?;
+            let hash = regions
+                .into_iter()
+                .map(|r| (r.name.clone(), r))
+                .collect::<HashMap<String, Region>>();
+            &Some(hash)
+        }
+        None => &None,
+    };
+
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
         Err(err) => {
@@ -212,19 +230,13 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         copy_uncalibrated_contigs(&mut bam, &mut out, &regions)?;
     }
 
-    // Calibrate sequin regions
-    calibrate_regions_by_standard_coverage(
-        &mut bam,
-        &mut out,
-        &regions,
-        args.fold_coverage as u64,
-        args.flank as u64,
-        args.seed,
-    )?;
+    calibrate_regions_by_fixed_coverage(&mut bam, &mut out, &regions, sample_regions, &args)?;
 
     if !args.exclude_uncalibrated_reads {
         copy_unmapped_reads(&mut bam, &mut out)?;
     }
+
+    drop(out);
 
     if args.write_index {
         if let Some(path) = &args.output {
@@ -267,39 +279,42 @@ fn copy_uncalibrated_contigs(
     Ok(())
 }
 
-fn calibrate_regions_by_standard_coverage(
-    bam: &mut bam::IndexedReader,
-    out: &mut bam::Writer,
+fn calibrate_regions_by_fixed_coverage(
+    bam: &mut IndexedReader,
+    out: &mut Writer,
     regions: &[Region],
-    fold_coverage: u64,
-    flank: u64,
-    seed: u64,
+    sample_regions: &Option<HashMap<String, Region>>,
+    args: &CalibrateArgs,
 ) -> Result<()> {
-    // Calibrate sequin regions
-    let mut rng = Pcg32::seed_from_u64(seed);
-    let mut pairs = HashMap::new();
-    let coverage = fold_coverage as f64;
+    let mut rng = Pcg32::seed_from_u64(args.seed);
+    let mut keep_names = HashMap::new();
+
+    // If we're using the sample mean coverage, we don't want to exclude the flanks from any of the
+    // calculations.
+    let flank = match args.sample_bed {
+        Some(_) => 0,
+        None => args.flank,
+    };
     for region in regions {
-        let depth = mean_depth(bam, region, flank as i32, 10, PILEUP_MAX_DEPTH)?.mean;
-        println!(
-            "{}:{}-{} {} {}",
-            region.contig,
-            region.beg,
-            region.end,
-            depth,
-            depth * (coverage / depth)
+        let target_coverage = sample_regions
+            .as_ref()
+            .and_then(|hash| hash.get(&region.name))
+            .and_then(|region| mean_depth(bam, region, flank, args.min_mapq, PILEUP_MAX_DEPTH).ok())
+            .map(|result| result.mean)
+            .unwrap_or(args.fold_coverage as f64);
+
+        let depth = mean_depth(bam, region, flank, args.min_mapq, PILEUP_MAX_DEPTH)?.mean;
+        let threshold = target_coverage / depth;
+
+        eprintln!(
+            "Calibrating {} ({}:{}-{}) mean_coverage={} target_coverage={}",
+            region.name, region.contig, region.beg, region.end, depth, target_coverage
         );
 
-        let beg = region.beg;
-        let end = region.end;
-
-        let threshold = coverage / depth;
-
-        bam.fetch((&region.contig, beg, end))?;
-
+        bam.fetch((&region.contig, region.beg, region.end))?;
         for r in bam.records() {
             let record = r?;
-            if subsample(&record, &mut pairs, threshold, &mut rng) {
+            if subsample(&record, &mut keep_names, threshold, &mut rng) {
                 out.write(&record)?;
             }
         }
@@ -470,7 +485,6 @@ pub fn mean_depth(
     let mut pileups = bam.pileup();
     pileups.set_max_depth(max_depth);
 
-    // for p in bam.pileup() {
     for p in pileups {
         let pileup = p.with_context(|| "pileup failed".to_string())?;
         if pileup.pos() < beg || pileup.pos() > end - 1 {
@@ -706,16 +720,9 @@ fn calibrate_regions(
             let indexes = choose_from(region_records.len() as i64, n_starts, args.seed);
             let numbers = match indexes {
                 Ok(numbers) => numbers,
-                Err(_) => {
-                    // This only seems to happen in the last window, why?
-                    // eprintln!(
-                    //     "warning: not enough records while processing {} {}:{}-{} window {}-{}: {}, using all records",
-                    //     name, contig, region_beg, region_end, window_beg, window_end, err
-                    // );
-                    (0..region_records.len())
-                        .map(|x| x.try_into().unwrap())
-                        .collect()
-                }
+                Err(_) => (0..region_records.len())
+                    .map(|x| x.try_into().unwrap())
+                    .collect(),
             };
             for idx in &numbers {
                 let record = region_records[*idx as usize];
@@ -903,6 +910,7 @@ mod tests {
             min_mapq: 0,
             write_index: false,
             exclude_uncalibrated_reads: false,
+            experimental: false,
         }
     }
 
@@ -1137,11 +1145,6 @@ mod tests {
 
     #[test]
     fn test_calibrate_by_standard_coverage() {
-        // Throw error if args contains sample
-        let args_with_sample = mock_calibrate_args(true, false);
-        let result = calibrate_by_standard_coverage(args_with_sample);
-        assert!(result.is_err());
-
         // Working correctly with expected args
         let args_expected = mock_calibrate_args(false, true);
         let out_path = args_expected.output.clone().unwrap();

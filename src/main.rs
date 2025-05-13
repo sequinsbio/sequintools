@@ -50,6 +50,10 @@ pub struct CalibrateArgs {
     #[arg(short, long)]
     bed: String,
 
+    /// Change to experimental sample profile matching - unsuitable for production workflows.
+    #[arg(long, default_value_t = false)]
+    experimental: bool,
+
     /// Write output to file (default standard output)
     #[arg(short, long)]
     output: Option<String>,
