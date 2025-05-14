@@ -1421,4 +1421,27 @@ mod tests {
         let result = subsample(&record, &mut hash, 1.0, &mut rng);
         assert!(result);
     }
+
+    #[test]
+    fn test_calibrate() {
+        let args = mock_calibrate_args(false, true);
+        let result = calibrate(args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_calibrate_experimental() {
+        let mut args = mock_calibrate_args(true, true);
+        args.experimental = true;
+        let result = calibrate(args);
+        assert!(result.is_ok(), "{:?}", result);
+    }
+
+    #[test]
+    fn test_calibrate_experimental_missing_sample_bed() {
+        let mut args = mock_calibrate_args(false, true);
+        args.experimental = true;
+        let result = calibrate(args);
+        assert!(result.is_err(), "{:?}", result);
+    }
 }
