@@ -995,6 +995,126 @@ mod tests {
     }
 
     #[test]
+    fn test_write_summary_report() {
+        let mut args = mock_calibrate_args(false, false);
+        args.summary_report = Some(
+            NamedTempFile::new()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .into_owned(),
+        );
+        let mut calibration_results = vec![
+            CalibrationResult {
+                region: Region {
+                    contig: "chrQ".to_string(),
+                    beg: 1,
+                    end: 2,
+                    name: "region1".to_string(),
+                },
+                uncalibrated_coverage: 1.0,
+                target_coverage: 2.0,
+                calibrated_coverage: 3.0,
+            },
+            CalibrationResult {
+                region: Region {
+                    contig: "chrQ".to_string(),
+                    beg: 10,
+                    end: 20,
+                    name: "region2".to_string(),
+                },
+                uncalibrated_coverage: 4.0,
+                target_coverage: 5.0,
+                calibrated_coverage: 6.0,
+            },
+        ];
+        let result = write_summary_report(&mut calibration_results, &args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_write_summary_report_with_output() {
+        let mut args = mock_calibrate_args(false, false);
+        args.output = Some("testdata/calibrated.bam".to_string());
+        args.summary_report = Some(
+            NamedTempFile::new()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .into_owned(),
+        );
+        let mut calibration_results = vec![
+            CalibrationResult {
+                region: Region {
+                    contig: "chrQ_mirror".to_string(),
+                    beg: 200,
+                    end: 4342,
+                    name: "SG_000000038".to_string(),
+                },
+                uncalibrated_coverage: 1.0,
+                target_coverage: 2.0,
+                calibrated_coverage: 3.0,
+            },
+            CalibrationResult {
+                region: Region {
+                    contig: "chrQ_mirror".to_string(),
+                    beg: 4542,
+                    end: 8684,
+                    name: "SG_000000039".to_string(),
+                },
+                uncalibrated_coverage: 4.0,
+                target_coverage: 5.0,
+                calibrated_coverage: 6.0,
+            },
+        ];
+        let result = write_summary_report(&mut calibration_results, &args);
+        assert!(result.is_ok());
+
+        let mut rdr = csv::Reader::from_path(args.summary_report.as_ref().unwrap()).unwrap();
+        let header = rdr.headers().unwrap();
+        assert_eq!(
+            header,
+            &csv::StringRecord::from(vec![
+                "name",
+                "chrom",
+                "start",
+                "end",
+                "uncalibrated_coverage",
+                "target_coverage",
+                "calibrated_coverage"
+            ])
+        );
+        let mut records = rdr.records();
+        let r1 = records.next().unwrap().unwrap();
+        assert_eq!(
+            r1,
+            csv::StringRecord::from(vec![
+                "SG_000000038",
+                "chrQ_mirror",
+                "200",
+                "4342",
+                "1",
+                "2",
+                "0"
+            ])
+        );
+        let r2 = records.next().unwrap().unwrap();
+        assert_eq!(
+            r2,
+            csv::StringRecord::from(vec![
+                "SG_000000039",
+                "chrQ_mirror",
+                "4542",
+                "8684",
+                "4",
+                "5",
+                "0"
+            ])
+        );
+        assert!(records.next().is_none());
+    }
+
+    #[test]
     fn test_window_starts() {
         let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
         let region = Region {
@@ -1238,6 +1358,13 @@ mod tests {
 
         // TODO: check the output BAM
     }
+
+    // #[test]
+    // fn test_calibrate_by_standard_coverage_with_sample() {
+    //     let args_expected = mock_calibrate_args(true, true);
+    //     let result = calibrate_by_standard_coverage(args_expected);
+    //     assert!(result.is_ok());
+    // }
 
     #[test]
     fn test_subsample() {
