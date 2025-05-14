@@ -201,22 +201,19 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
 
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
 
-    let sample_regions: &Option<HashMap<String, Region>> = match args.sample_bed.as_ref() {
-        Some(path) => {
-            let file = File::open(path)
-                .with_context(|| format!("Failed to open sample BED file: '{}'", path))?;
-            let mut buf = io::BufReader::new(file);
-            let regions = region::load_from_bed(&mut buf).with_context(|| {
-                format!("Failed to load regions from sample BED file: '{}'", path)
-            })?;
-            let hash = regions
+    let sample_regions = args
+        .sample_bed
+        .as_ref()
+        .map(File::open)
+        .transpose()?
+        .map(|mut file| region::load_from_bed(&mut file))
+        .transpose()?
+        .map(|regions| {
+            regions
                 .into_iter()
-                .map(|r| (r.name.clone(), r))
-                .collect::<HashMap<String, Region>>();
-            &Some(hash)
-        }
-        None => &None,
-    };
+                .map(|region| (region.name.clone(), region))
+                .collect::<HashMap<_, _>>()
+        });
 
     let mut bam = match bam::IndexedReader::from_path(&args.path) {
         Ok(r) => r,
@@ -240,7 +237,7 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
     }
 
     let mut calibration_results =
-        calibrate_regions_by_fixed_coverage(&mut bam, &mut out, &regions, sample_regions, &args)?;
+        calibrate_regions_by_fixed_coverage(&mut bam, &mut out, &regions, &sample_regions, &args)?;
 
     if !args.exclude_uncalibrated_reads {
         copy_unmapped_reads(&mut bam, &mut out)?;
