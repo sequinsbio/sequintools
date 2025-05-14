@@ -1359,12 +1359,12 @@ mod tests {
         // TODO: check the output BAM
     }
 
-    // #[test]
-    // fn test_calibrate_by_standard_coverage_with_sample() {
-    //     let args_expected = mock_calibrate_args(true, true);
-    //     let result = calibrate_by_standard_coverage(args_expected);
-    //     assert!(result.is_ok());
-    // }
+    #[test]
+    fn test_calibrate_by_standard_coverage_with_sample() {
+        let args_expected = mock_calibrate_args(true, true);
+        let result = calibrate_by_standard_coverage(args_expected);
+        assert!(result.is_ok());
+    }
 
     #[test]
     fn test_subsample() {
