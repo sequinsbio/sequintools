@@ -50,7 +50,14 @@ pub struct CalibrateArgs {
     #[arg(short, long)]
     bed: String,
 
-    /// Change to experimental sample profile matching - unsuitable for production workflows.
+    /// File to write summary report (CSV). Will contain uncalibrated, target
+    /// and calibrated mean coverage of each sequin region. Only created when
+    /// `--sample-bed` is provided.
+    #[arg(long)]
+    summary_report: Option<String>,
+
+    /// Change to experimental sample profile matching - unsuitable for
+    /// production workflows.
     #[arg(long, default_value_t = false)]
     experimental: bool,
 

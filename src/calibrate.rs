@@ -55,7 +55,7 @@
 //! The module assumes 0-based coordinates in BED files.
 use crate::region::{self, Region};
 use crate::CalibrateArgs;
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use rand::seq::IteratorRandom;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
@@ -67,6 +67,7 @@ use std::error::Error;
 use std::fmt;
 use std::fs::File;
 use std::io;
+use std::path::Path;
 use std::process::exit;
 use std::vec::Vec;
 
@@ -190,6 +191,14 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
 /// calibrate_by_standard_coverage(args)?;
 /// ```
 pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
+    // Check summary report file doesn't already exist, so that we don't spend time calibrating
+    // only to fail later.
+    if let Some(path) = args.summary_report.as_ref() {
+        if Path::new(&path).exists() {
+            bail!("The summary report file '{}' already exists", path);
+        }
+    };
+
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
 
     let sample_regions: &Option<HashMap<String, Region>> = match args.sample_bed.as_ref() {
@@ -230,7 +239,8 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         copy_uncalibrated_contigs(&mut bam, &mut out, &regions)?;
     }
 
-    calibrate_regions_by_fixed_coverage(&mut bam, &mut out, &regions, sample_regions, &args)?;
+    let mut calibration_results =
+        calibrate_regions_by_fixed_coverage(&mut bam, &mut out, &regions, sample_regions, &args)?;
 
     if !args.exclude_uncalibrated_reads {
         copy_unmapped_reads(&mut bam, &mut out)?;
@@ -242,6 +252,57 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         if let Some(path) = &args.output {
             bam::index::build(path, None, bam::index::Type::Bai, 1).unwrap();
         }
+    }
+
+    if args.summary_report.is_some() {
+        write_summary_report(&mut calibration_results, &args)?;
+    }
+
+    Ok(())
+}
+
+/// Create a CSV summary of the calibration results.
+fn write_summary_report(
+    calibration_results: &mut [CalibrationResult],
+    args: &CalibrateArgs,
+) -> Result<()> {
+    let path = args.summary_report.as_ref().unwrap();
+    let file = File::create(path)?;
+    let mut writer = csv::Writer::from_writer(file);
+    writer.write_record([
+        "name",
+        "chrom",
+        "start",
+        "end",
+        "uncalibrated_coverage",
+        "target_coverage",
+        "calibrated_coverage",
+    ])?;
+
+    for result in calibration_results {
+        let region = &result.region;
+        // How can we compute the calibrated coverage if no file is written (i.e., it's being
+        // piped)
+        if let Some(path) = &args.output {
+            let mut bam = IndexedReader::from_path(path)?;
+            let flank = if args.sample_bed.is_some() {
+                0
+            } else {
+                args.flank
+            };
+            result.calibrated_coverage =
+                mean_depth(&mut bam, region, flank, args.min_mapq, PILEUP_MAX_DEPTH)?.mean;
+        }
+
+        writer.write_record(&[
+            region.name.clone(),
+            region.contig.clone(),
+            region.beg.to_string(),
+            region.end.to_string(),
+            result.uncalibrated_coverage.to_string(),
+            result.target_coverage.to_string(),
+            result.calibrated_coverage.to_string(),
+        ])?;
     }
     Ok(())
 }
@@ -279,13 +340,20 @@ fn copy_uncalibrated_contigs(
     Ok(())
 }
 
+struct CalibrationResult {
+    region: Region,
+    uncalibrated_coverage: f64,
+    target_coverage: f64,
+    calibrated_coverage: f64,
+}
+
 fn calibrate_regions_by_fixed_coverage(
     bam: &mut IndexedReader,
     out: &mut Writer,
     regions: &[Region],
     sample_regions: &Option<HashMap<String, Region>>,
     args: &CalibrateArgs,
-) -> Result<()> {
+) -> Result<Vec<CalibrationResult>> {
     let mut rng = Pcg32::seed_from_u64(args.seed);
     let mut keep_names = HashMap::new();
 
@@ -295,6 +363,7 @@ fn calibrate_regions_by_fixed_coverage(
         Some(_) => 0,
         None => args.flank,
     };
+    let mut results = Vec::new();
     for region in regions {
         let target_coverage = sample_regions
             .as_ref()
@@ -318,8 +387,15 @@ fn calibrate_regions_by_fixed_coverage(
                 out.write(&record)?;
             }
         }
+        let result = CalibrationResult {
+            region: region.clone(),
+            uncalibrated_coverage: depth,
+            target_coverage,
+            calibrated_coverage: 0.0,
+        };
+        results.push(result);
     }
-    Ok(())
+    Ok(results)
 }
 
 fn subsample(
@@ -328,6 +404,9 @@ fn subsample(
     threshold: f64,
     rng: &mut Pcg32,
 ) -> bool {
+    if record.is_duplicate() {
+        return false;
+    }
     let qname = String::from_utf8(record.qname().to_vec()).unwrap();
     match hash.get(&qname) {
         Some(_) => return true,
@@ -911,6 +990,7 @@ mod tests {
             write_index: false,
             exclude_uncalibrated_reads: false,
             experimental: false,
+            summary_report: None,
         }
     }
 
