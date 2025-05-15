@@ -68,7 +68,6 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::path::Path;
-use std::process::exit;
 use std::vec::Vec;
 
 // Defines the maximum depth for pileup operations. htslib defines this as
@@ -128,12 +127,10 @@ const PILEUP_MAX_DEPTH: u32 = i32::MAX as u32;
 /// }
 /// ```
 pub fn calibrate(args: CalibrateArgs) -> Result<()> {
-    if !args.experimental {
-        calibrate_by_standard_coverage(args)?;
-    } else {
-        calibrate_by_sample_coverage(args)?;
+    if args.experimental {
+        return calibrate_by_sample_coverage(args);
     }
-    Ok(())
+    calibrate_by_standard_coverage(args)
 }
 
 /// Calibrates sequin coverage by applying a mean target coverage to all sequin
@@ -199,13 +196,16 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         }
     };
 
-    let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
+    let regions = region::load_from_bed(&mut io::BufReader::new(
+        File::open(&args.bed).with_context(|| "Failed to open decoy bed file")?,
+    ))?;
 
     let sample_regions = args
         .sample_bed
         .as_ref()
         .map(File::open)
-        .transpose()?
+        .transpose()
+        .with_context(|| "Failed to open sample bed file")?
         .map(|mut file| region::load_from_bed(&mut file))
         .transpose()?
         .map(|regions| {
@@ -215,13 +215,8 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
                 .collect::<HashMap<_, _>>()
         });
 
-    let mut bam = match bam::IndexedReader::from_path(&args.path) {
-        Ok(r) => r,
-        Err(err) => {
-            eprintln!("unable to open input BAM: {}", err);
-            exit(1);
-        }
-    };
+    let mut bam = bam::IndexedReader::from_path(&args.path)
+        .with_context(|| "Failed to open input bam file")?;
     let header = bam::Header::from_template(bam.header());
     let mut out = match &args.output {
         Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
@@ -656,13 +651,8 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     let cal_contigs = calibrated_contigs(&args.bed)?;
 
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
-    let mut bam = match bam::IndexedReader::from_path(&args.path) {
-        Ok(r) => r,
-        Err(err) => {
-            eprintln!("unable to open input BAM: {}", err);
-            exit(1);
-        }
-    };
+    let mut bam =
+        bam::IndexedReader::from_path(&args.path).with_context(|| "Failed to open input bam")?;
     {
         let header = bam::Header::from_template(bam.header());
         let mut out = match &args.output {
