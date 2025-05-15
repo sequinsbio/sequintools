@@ -41,7 +41,7 @@ docker pull ghcr.io/sequinsbio/sequintools:latest
 ```
 
 As an example, you could run the calibration step as below, make sure the
-example folder is under you current path.
+example folder is under your current path.
 
 ```sh
 docker run --rm -v $PWD:/data ghcr.io/sequinsbio/sequintools \
