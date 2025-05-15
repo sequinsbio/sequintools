@@ -28,7 +28,7 @@ use std::io::Read;
 /// - `beg`: The starting position of the region.
 /// - `end`: The ending position of the region.
 /// - `name`: The identifier name of the region.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Region {
     pub contig: String,
     pub beg: u64,

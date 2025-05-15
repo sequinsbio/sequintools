@@ -55,10 +55,11 @@
 //! The module assumes 0-based coordinates in BED files.
 use crate::region::{self, Region};
 use crate::CalibrateArgs;
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use rand::seq::IteratorRandom;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
+use rust_htslib::bam::{IndexedReader, Writer};
 use rust_htslib::{bam, bam::Read};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -66,7 +67,7 @@ use std::error::Error;
 use std::fmt;
 use std::fs::File;
 use std::io;
-use std::process::exit;
+use std::path::Path;
 use std::vec::Vec;
 
 // Defines the maximum depth for pileup operations. htslib defines this as
@@ -126,14 +127,18 @@ const PILEUP_MAX_DEPTH: u32 = i32::MAX as u32;
 /// }
 /// ```
 pub fn calibrate(args: CalibrateArgs) -> Result<()> {
-    let _ = match args.sample_bed {
-        Some(_) => calibrate_by_sample_coverage(args),
-        None => calibrate_by_standard_coverage(args),
-    };
-    Ok(())
+    if args.experimental {
+        return calibrate_by_sample_coverage(args);
+    }
+    calibrate_by_standard_coverage(args)
 }
 
-/// Calibrates sequin coverage by applying a mean target coverage to all sequin regions.
+/// Calibrates sequin coverage by applying a mean target coverage to all sequin
+/// regions.
+///
+/// The target coverage is either obtained from the mean coverage of the
+/// corresponding region in the sample data (if `args.sample_bed` is not None),
+/// or using a fixed coverage (taken from `args.fold_coverage`).
 ///
 /// This function performs standard coverage calibration by:
 /// 1. Processing each region in the input BED file
@@ -183,21 +188,35 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
 /// calibrate_by_standard_coverage(args)?;
 /// ```
 pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
-    if args.sample_bed.is_some() {
-        return Err(CalibrateError::new(
-            "Cannot use standard coverage calibration when sample bed file is provided",
-        )
-        .into());
-    }
-
-    let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
-    let mut bam = match bam::IndexedReader::from_path(&args.path) {
-        Ok(r) => r,
-        Err(err) => {
-            eprintln!("unable to open input BAM: {}", err);
-            exit(1);
+    // Check summary report file doesn't already exist, so that we don't spend time calibrating
+    // only to fail later.
+    if let Some(path) = args.summary_report.as_ref() {
+        if Path::new(&path).exists() {
+            bail!("The summary report file '{}' already exists", path);
         }
     };
+
+    let regions = region::load_from_bed(&mut io::BufReader::new(
+        File::open(&args.bed).with_context(|| "Failed to open decoy bed file")?,
+    ))?;
+
+    let sample_regions = args
+        .sample_bed
+        .as_ref()
+        .map(File::open)
+        .transpose()
+        .with_context(|| "Failed to open sample bed file")?
+        .map(|mut file| region::load_from_bed(&mut file))
+        .transpose()?
+        .map(|regions| {
+            regions
+                .into_iter()
+                .map(|region| (region.name.clone(), region))
+                .collect::<HashMap<_, _>>()
+        });
+
+    let mut bam = bam::IndexedReader::from_path(&args.path)
+        .with_context(|| "Failed to open input bam file")?;
     let header = bam::Header::from_template(bam.header());
     let mut out = match &args.output {
         Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
@@ -212,24 +231,70 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         copy_uncalibrated_contigs(&mut bam, &mut out, &regions)?;
     }
 
-    // Calibrate sequin regions
-    calibrate_regions_by_standard_coverage(
-        &mut bam,
-        &mut out,
-        &regions,
-        args.fold_coverage as u64,
-        args.flank as u64,
-        args.seed,
-    )?;
+    let mut calibration_results =
+        calibrate_regions_by_fixed_coverage(&mut bam, &mut out, &regions, &sample_regions, &args)?;
 
     if !args.exclude_uncalibrated_reads {
         copy_unmapped_reads(&mut bam, &mut out)?;
     }
 
+    drop(out);
+
     if args.write_index {
         if let Some(path) = &args.output {
             bam::index::build(path, None, bam::index::Type::Bai, 1).unwrap();
         }
+    }
+
+    if args.summary_report.is_some() {
+        write_summary_report(&mut calibration_results, &args)?;
+    }
+
+    Ok(())
+}
+
+/// Create a CSV summary of the calibration results.
+fn write_summary_report(
+    calibration_results: &mut [CalibrationResult],
+    args: &CalibrateArgs,
+) -> Result<()> {
+    let path = args.summary_report.as_ref().unwrap();
+    let file = File::create(path)?;
+    let mut writer = csv::Writer::from_writer(file);
+    writer.write_record([
+        "name",
+        "chrom",
+        "start",
+        "end",
+        "uncalibrated_coverage",
+        "target_coverage",
+        "calibrated_coverage",
+    ])?;
+
+    for result in calibration_results {
+        let region = &result.region;
+        // How can we compute the calibrated coverage if no file is written (i.e., it's being
+        // piped)
+        if let Some(path) = &args.output {
+            let mut bam = IndexedReader::from_path(path)?;
+            let flank = if args.sample_bed.is_some() {
+                0
+            } else {
+                args.flank
+            };
+            result.calibrated_coverage =
+                mean_depth(&mut bam, region, flank, args.min_mapq, PILEUP_MAX_DEPTH)?.mean;
+        }
+
+        writer.write_record(&[
+            region.name.clone(),
+            region.contig.clone(),
+            region.beg.to_string(),
+            region.end.to_string(),
+            result.uncalibrated_coverage.to_string(),
+            result.target_coverage.to_string(),
+            result.calibrated_coverage.to_string(),
+        ])?;
     }
     Ok(())
 }
@@ -267,44 +332,62 @@ fn copy_uncalibrated_contigs(
     Ok(())
 }
 
-fn calibrate_regions_by_standard_coverage(
-    bam: &mut bam::IndexedReader,
-    out: &mut bam::Writer,
+struct CalibrationResult {
+    region: Region,
+    uncalibrated_coverage: f64,
+    target_coverage: f64,
+    calibrated_coverage: f64,
+}
+
+fn calibrate_regions_by_fixed_coverage(
+    bam: &mut IndexedReader,
+    out: &mut Writer,
     regions: &[Region],
-    fold_coverage: u64,
-    flank: u64,
-    seed: u64,
-) -> Result<()> {
-    // Calibrate sequin regions
-    let mut rng = Pcg32::seed_from_u64(seed);
-    let mut pairs = HashMap::new();
-    let coverage = fold_coverage as f64;
+    sample_regions: &Option<HashMap<String, Region>>,
+    args: &CalibrateArgs,
+) -> Result<Vec<CalibrationResult>> {
+    let mut rng = Pcg32::seed_from_u64(args.seed);
+    let mut keep_names = HashMap::new();
+
+    // If we're using the sample mean coverage, we don't want to exclude the flanks from any of the
+    // calculations.
+    let flank = match args.sample_bed {
+        Some(_) => 0,
+        None => args.flank,
+    };
+    let mut results = Vec::new();
     for region in regions {
-        let depth = mean_depth(bam, region, flank as i32, 10, PILEUP_MAX_DEPTH)?.mean;
-        println!(
-            "{}:{}-{} {} {}",
-            region.contig,
-            region.beg,
-            region.end,
-            depth,
-            depth * (coverage / depth)
+        let target_coverage = sample_regions
+            .as_ref()
+            .and_then(|hash| hash.get(&region.name))
+            .and_then(|region| mean_depth(bam, region, flank, args.min_mapq, PILEUP_MAX_DEPTH).ok())
+            .map(|result| result.mean)
+            .unwrap_or(args.fold_coverage as f64);
+
+        let depth = mean_depth(bam, region, flank, args.min_mapq, PILEUP_MAX_DEPTH)?.mean;
+        let threshold = target_coverage / depth;
+
+        eprintln!(
+            "Calibrating {} ({}:{}-{}) mean_coverage={} target_coverage={}",
+            region.name, region.contig, region.beg, region.end, depth, target_coverage
         );
 
-        let beg = region.beg;
-        let end = region.end;
-
-        let threshold = coverage / depth;
-
-        bam.fetch((&region.contig, beg, end))?;
-
+        bam.fetch((&region.contig, region.beg, region.end))?;
         for r in bam.records() {
             let record = r?;
-            if subsample(&record, &mut pairs, threshold, &mut rng) {
+            if subsample(&record, &mut keep_names, threshold, &mut rng) {
                 out.write(&record)?;
             }
         }
+        let result = CalibrationResult {
+            region: region.clone(),
+            uncalibrated_coverage: depth,
+            target_coverage,
+            calibrated_coverage: 0.0,
+        };
+        results.push(result);
     }
-    Ok(())
+    Ok(results)
 }
 
 fn subsample(
@@ -313,6 +396,9 @@ fn subsample(
     threshold: f64,
     rng: &mut Pcg32,
 ) -> bool {
+    if record.is_duplicate() {
+        return false;
+    }
     let qname = String::from_utf8(record.qname().to_vec()).unwrap();
     match hash.get(&qname) {
         Some(_) => return true,
@@ -470,7 +556,6 @@ pub fn mean_depth(
     let mut pileups = bam.pileup();
     pileups.set_max_depth(max_depth);
 
-    // for p in bam.pileup() {
     for p in pileups {
         let pileup = p.with_context(|| "pileup failed".to_string())?;
         if pileup.pos() < beg || pileup.pos() > end - 1 {
@@ -566,13 +651,8 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     let cal_contigs = calibrated_contigs(&args.bed)?;
 
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
-    let mut bam = match bam::IndexedReader::from_path(&args.path) {
-        Ok(r) => r,
-        Err(err) => {
-            eprintln!("unable to open input BAM: {}", err);
-            exit(1);
-        }
-    };
+    let mut bam =
+        bam::IndexedReader::from_path(&args.path).with_context(|| "Failed to open input bam")?;
     {
         let header = bam::Header::from_template(bam.header());
         let mut out = match &args.output {
@@ -706,16 +786,9 @@ fn calibrate_regions(
             let indexes = choose_from(region_records.len() as i64, n_starts, args.seed);
             let numbers = match indexes {
                 Ok(numbers) => numbers,
-                Err(_) => {
-                    // This only seems to happen in the last window, why?
-                    // eprintln!(
-                    //     "warning: not enough records while processing {} {}:{}-{} window {}-{}: {}, using all records",
-                    //     name, contig, region_beg, region_end, window_beg, window_end, err
-                    // );
-                    (0..region_records.len())
-                        .map(|x| x.try_into().unwrap())
-                        .collect()
-                }
+                Err(_) => (0..region_records.len())
+                    .map(|x| x.try_into().unwrap())
+                    .collect(),
             };
             for idx in &numbers {
                 let record = region_records[*idx as usize];
@@ -903,7 +976,129 @@ mod tests {
             min_mapq: 0,
             write_index: false,
             exclude_uncalibrated_reads: false,
+            experimental: false,
+            summary_report: None,
         }
+    }
+
+    #[test]
+    fn test_write_summary_report() {
+        let mut args = mock_calibrate_args(false, false);
+        args.summary_report = Some(
+            NamedTempFile::new()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .into_owned(),
+        );
+        let mut calibration_results = vec![
+            CalibrationResult {
+                region: Region {
+                    contig: "chrQ".to_string(),
+                    beg: 1,
+                    end: 2,
+                    name: "region1".to_string(),
+                },
+                uncalibrated_coverage: 1.0,
+                target_coverage: 2.0,
+                calibrated_coverage: 3.0,
+            },
+            CalibrationResult {
+                region: Region {
+                    contig: "chrQ".to_string(),
+                    beg: 10,
+                    end: 20,
+                    name: "region2".to_string(),
+                },
+                uncalibrated_coverage: 4.0,
+                target_coverage: 5.0,
+                calibrated_coverage: 6.0,
+            },
+        ];
+        let result = write_summary_report(&mut calibration_results, &args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_write_summary_report_with_output() {
+        let mut args = mock_calibrate_args(false, false);
+        args.output = Some("testdata/calibrated.bam".to_string());
+        args.summary_report = Some(
+            NamedTempFile::new()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .into_owned(),
+        );
+        let mut calibration_results = vec![
+            CalibrationResult {
+                region: Region {
+                    contig: "chrQ_mirror".to_string(),
+                    beg: 200,
+                    end: 4342,
+                    name: "SG_000000038".to_string(),
+                },
+                uncalibrated_coverage: 1.0,
+                target_coverage: 2.0,
+                calibrated_coverage: 3.0,
+            },
+            CalibrationResult {
+                region: Region {
+                    contig: "chrQ_mirror".to_string(),
+                    beg: 4542,
+                    end: 8684,
+                    name: "SG_000000039".to_string(),
+                },
+                uncalibrated_coverage: 4.0,
+                target_coverage: 5.0,
+                calibrated_coverage: 6.0,
+            },
+        ];
+        let result = write_summary_report(&mut calibration_results, &args);
+        assert!(result.is_ok());
+
+        let mut rdr = csv::Reader::from_path(args.summary_report.as_ref().unwrap()).unwrap();
+        let header = rdr.headers().unwrap();
+        assert_eq!(
+            header,
+            &csv::StringRecord::from(vec![
+                "name",
+                "chrom",
+                "start",
+                "end",
+                "uncalibrated_coverage",
+                "target_coverage",
+                "calibrated_coverage"
+            ])
+        );
+        let mut records = rdr.records();
+        let r1 = records.next().unwrap().unwrap();
+        assert_eq!(
+            r1,
+            csv::StringRecord::from(vec![
+                "SG_000000038",
+                "chrQ_mirror",
+                "200",
+                "4342",
+                "1",
+                "2",
+                "0"
+            ])
+        );
+        let r2 = records.next().unwrap().unwrap();
+        assert_eq!(
+            r2,
+            csv::StringRecord::from(vec![
+                "SG_000000039",
+                "chrQ_mirror",
+                "4542",
+                "8684",
+                "4",
+                "5",
+                "0"
+            ])
+        );
+        assert!(records.next().is_none());
     }
 
     #[test]
@@ -1137,11 +1332,6 @@ mod tests {
 
     #[test]
     fn test_calibrate_by_standard_coverage() {
-        // Throw error if args contains sample
-        let args_with_sample = mock_calibrate_args(true, false);
-        let result = calibrate_by_standard_coverage(args_with_sample);
-        assert!(result.is_err());
-
         // Working correctly with expected args
         let args_expected = mock_calibrate_args(false, true);
         let out_path = args_expected.output.clone().unwrap();
@@ -1154,6 +1344,13 @@ mod tests {
         assert!(metadata.len() > 0, "Output BAM file should not be empty");
 
         // TODO: check the output BAM
+    }
+
+    #[test]
+    fn test_calibrate_by_standard_coverage_with_sample() {
+        let args_expected = mock_calibrate_args(true, true);
+        let result = calibrate_by_standard_coverage(args_expected);
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -1213,5 +1410,28 @@ mod tests {
 
         let result = subsample(&record, &mut hash, 1.0, &mut rng);
         assert!(result);
+    }
+
+    #[test]
+    fn test_calibrate() {
+        let args = mock_calibrate_args(false, true);
+        let result = calibrate(args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_calibrate_experimental() {
+        let mut args = mock_calibrate_args(true, true);
+        args.experimental = true;
+        let result = calibrate(args);
+        assert!(result.is_ok(), "{:?}", result);
+    }
+
+    #[test]
+    fn test_calibrate_experimental_missing_sample_bed() {
+        let mut args = mock_calibrate_args(false, true);
+        args.experimental = true;
+        let result = calibrate(args);
+        assert!(result.is_err(), "{:?}", result);
     }
 }
