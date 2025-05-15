@@ -96,7 +96,7 @@ Alternatively, you can use the sample data in the same BAM file to adjust the
 Sequin coverage to more closely represent the coverage of the controlled
 region. This method uses the mean depth of the region in the sample data that
 corresponds to each Sequin rather than a fixed coverage for all Sequin regions.
-To do this, you need to provide two BED files one containing the Sequin regions
+To do this, you need to provide two BED files: one containing the Sequin regions
 on the decoy chromosome and the other containing the reference genome locations
 they control for. The name column (4th column) must match between the two BED
 files.
