@@ -124,7 +124,7 @@ sequintools calibrate \
     example/example.bam
 ```
 
-You can also create a summary file with the before and after coverage with the
+You can also create a summary file with before and after coverage using the
 `--summary-report` option:
 
 ```sh
