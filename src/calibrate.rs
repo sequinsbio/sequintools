@@ -285,7 +285,10 @@ fn write_summary_report(
         .map(IndexedReader::from_path)
         .transpose()
         .with_context(|| "Failed to open BAM file")?;
-    bam.as_mut().map(|b| b.set_threads(ncpus));
+    if let Some(b) = bam.as_mut() {
+        b.set_threads(ncpus)
+            .with_context(|| "Failed to set thread count for BAM reader")?;
+    }
     let flank = if args.sample_bed.is_some() {
         0
     } else {
