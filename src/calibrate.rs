@@ -1124,6 +1124,21 @@ mod tests {
     }
 
     #[test]
+    fn test_write_summary_report_missing_output() {
+        let mut args = mock_calibrate_args(false, false);
+        args.output = Some("does-not-exist".to_string());
+        args.summary_report = Some(
+            NamedTempFile::new()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .into_owned(),
+        );
+        let result = write_summary_report(&mut [], &args);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_window_starts() {
         let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
         let region = Region {
@@ -1455,5 +1470,13 @@ mod tests {
         args.experimental = true;
         let result = calibrate(args);
         assert!(result.is_err(), "{:?}", result);
+    }
+
+    #[test]
+    fn test_calibrate_by_standard_coverage_missing_bam() {
+        let mut args = mock_calibrate_args(false, true);
+        args.path = "does-not-exist".to_string();
+        let result = calibrate_by_standard_coverage(args);
+        assert!(result.is_err());
     }
 }
