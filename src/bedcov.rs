@@ -2,7 +2,7 @@ use crate::calibrate::{mean_depth, DepthResult};
 use crate::region::{load_from_bed, Region};
 use crate::BedcovArgs;
 use anyhow::Result;
-use rust_htslib::bam;
+use rust_htslib::bam::{self, Read};
 use std::fs::File;
 use std::io::{self, Write};
 
@@ -53,6 +53,10 @@ fn bedcov_report<W: Write>(
     dest: W,
 ) -> Result<()> {
     let mut bam = bam::IndexedReader::from_path(bam_path)?;
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    bam.set_threads(ncpus)?;
     let regions: Vec<Region> = load_from_bed(&mut io::BufReader::new(File::open(bed_path)?))?;
 
     let mut wtr = csv::Writer::from_writer(dest);
