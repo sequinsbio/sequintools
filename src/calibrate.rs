@@ -299,8 +299,7 @@ fn write_summary_report(
         result.calibrated_coverage = bam
             .as_mut()
             .map(|b| mean_depth(b, region, flank, args.min_mapq, PILEUP_MAX_DEPTH))
-            .transpose()
-            .with_context(|| "Failed to calculate mean depth")?
+            .transpose()?
             .map(|d| d.mean)
             .unwrap_or(0.0);
 
@@ -1038,6 +1037,20 @@ mod tests {
             },
         ];
         let result = write_summary_report(&mut calibration_results, &args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_write_summary_report_with_sample() {
+        let mut args = mock_calibrate_args(true, false);
+        args.summary_report = Some(
+            NamedTempFile::new()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .into_owned(),
+        );
+        let result = write_summary_report(&mut [], &args);
         assert!(result.is_ok());
     }
 
