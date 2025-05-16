@@ -217,6 +217,10 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
 
     let mut bam = bam::IndexedReader::from_path(&args.path)
         .with_context(|| "Failed to open input bam file")?;
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    bam.set_threads(ncpus)?;
     let header = bam::Header::from_template(bam.header());
     let mut out = match &args.output {
         Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
@@ -271,20 +275,34 @@ fn write_summary_report(
         "calibrated_coverage",
     ])?;
 
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+
+    let mut bam = args
+        .output
+        .as_ref()
+        .map(IndexedReader::from_path)
+        .transpose()
+        .with_context(|| "Failed to open BAM file")?;
+    bam.as_mut().map(|b| b.set_threads(ncpus));
+    let flank = if args.sample_bed.is_some() {
+        0
+    } else {
+        args.flank
+    };
+
     for result in calibration_results {
         let region = &result.region;
         // How can we compute the calibrated coverage if no file is written (i.e., it's being
         // piped)
-        if let Some(path) = &args.output {
-            let mut bam = IndexedReader::from_path(path)?;
-            let flank = if args.sample_bed.is_some() {
-                0
-            } else {
-                args.flank
-            };
-            result.calibrated_coverage =
-                mean_depth(&mut bam, region, flank, args.min_mapq, PILEUP_MAX_DEPTH)?.mean;
-        }
+        result.calibrated_coverage = bam
+            .as_mut()
+            .map(|b| mean_depth(b, region, flank, args.min_mapq, PILEUP_MAX_DEPTH))
+            .transpose()
+            .with_context(|| "Failed to calculate mean depth")?
+            .map(|d| d.mean)
+            .unwrap_or(0.0);
 
         writer.write_record(&[
             region.name.clone(),
@@ -653,6 +671,10 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
     let mut bam =
         bam::IndexedReader::from_path(&args.path).with_context(|| "Failed to open input bam")?;
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    bam.set_threads(ncpus)?;
     {
         let header = bam::Header::from_template(bam.header());
         let mut out = match &args.output {
