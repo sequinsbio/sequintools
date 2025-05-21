@@ -1432,7 +1432,6 @@ mod tests {
         args.reference = Some(TEST_CRAM_REF_PATH.to_string());
         args.bed = TEST_CRAM_BED_PATH.to_string();
         let result = calibrate_by_standard_coverage(args);
-        eprintln!("{:?}", result);
         assert!(result.is_ok());
         let metadata = std::fs::metadata(&out_path).unwrap();
         assert!(metadata.len() > 0, "Output BAM file should not be empty");

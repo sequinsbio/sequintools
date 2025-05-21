@@ -257,4 +257,23 @@ mod tests {
         let result = bedcov(args);
         assert!(result.is_err());
     }
+
+    const TEST_CRAM_PATH: &str = "testdata/calibrated.cram";
+    const TEST_CRAM_REF_PATH: &str = "testdata/reference.fasta";
+    const TEST_CRAM_BED_PATH: &str = "testdata/cram_regions.bed";
+
+    #[test]
+    fn bedcov_stdout_cram() {
+        // BedcovArgs for testing
+        let args = BedcovArgs {
+            bam_path: TEST_CRAM_PATH.to_string(),
+            bed_path: TEST_CRAM_BED_PATH.to_string(),
+            min_mapq: 0,
+            flank: 0,
+            max_depth: 8_000,
+            reference: Some(TEST_CRAM_REF_PATH.to_string()),
+        };
+        let result = bedcov(args);
+        assert!(result.is_ok());
+    }
 }
