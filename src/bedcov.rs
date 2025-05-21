@@ -50,6 +50,7 @@ fn bedcov_report<W: Write>(
     min_mapq: u8,
     flank: i32,
     max_depth: u32,
+    reference_path: Option<String>,
     dest: W,
 ) -> Result<()> {
     let mut bam = bam::IndexedReader::from_path(bam_path)?;
@@ -57,6 +58,9 @@ fn bedcov_report<W: Write>(
         .map(|n| n.get())
         .unwrap_or(1);
     bam.set_threads(ncpus)?;
+    if let Some(reference) = reference_path {
+        bam.set_reference(reference)?;
+    }
     let regions: Vec<Region> = load_from_bed(&mut io::BufReader::new(File::open(bed_path)?))?;
 
     let mut wtr = csv::Writer::from_writer(dest);
@@ -138,6 +142,7 @@ pub fn bedcov(args: BedcovArgs) -> Result<()> {
         args.min_mapq,
         args.flank,
         args.max_depth,
+        args.reference,
         io::stdout(),
     )
 }
@@ -199,7 +204,8 @@ mod tests {
         let mut buffer = Vec::new();
         let bam_path = &get_test_path("bam");
         let bed_path = &get_test_path("bed");
-        let result = bedcov_report(bam_path, bed_path, 0, 0, 8_000, &mut buffer);
+        let reference_path = None;
+        let result = bedcov_report(bam_path, bed_path, 0, 0, 8_000, reference_path, &mut buffer);
         assert!(result.is_ok());
 
         // Compare the report with the expected
@@ -218,6 +224,7 @@ mod tests {
             min_mapq: 0,
             flank: 0,
             max_depth: 8_000,
+            reference: None,
         };
         let result = bedcov(args);
         assert!(result.is_ok());
@@ -231,6 +238,7 @@ mod tests {
             min_mapq: 0,
             flank: 0,
             max_depth: 8_000,
+            reference: None,
         };
         let result = bedcov(args);
         assert!(result.is_err());
@@ -244,6 +252,7 @@ mod tests {
             min_mapq: 0,
             flank: 0,
             max_depth: 8_000,
+            reference: None,
         };
         let result = bedcov(args);
         assert!(result.is_err());

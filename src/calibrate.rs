@@ -221,6 +221,9 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         .map(|n| n.get())
         .unwrap_or(1);
     bam.set_threads(ncpus)?;
+    if let Some(reference) = args.reference.as_ref() {
+        bam.set_reference(reference)?;
+    }
     let header = bam::Header::from_template(bam.header());
     let mut out = match &args.output {
         Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
@@ -288,7 +291,11 @@ fn write_summary_report(
     if let Some(b) = bam.as_mut() {
         b.set_threads(ncpus)
             .with_context(|| "Failed to set thread count for BAM reader")?;
+        if let Some(reference) = args.reference.as_ref() {
+            b.set_reference(reference)?;
+        }
     }
+
     let flank = if args.sample_bed.is_some() {
         0
     } else {
@@ -677,6 +684,9 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
         .map(|n| n.get())
         .unwrap_or(1);
     bam.set_threads(ncpus)?;
+    if let Some(reference) = args.reference.as_ref() {
+        bam.set_reference(reference)?;
+    }
     {
         let header = bam::Header::from_template(bam.header());
         let mut out = match &args.output {
@@ -790,7 +800,7 @@ fn calibrate_regions(
             let window_end = window_beg + args.window_size - 1;
 
             // We are always keeping both reads from paired-end data, so
-            // ever  ytime we select a read to keep we are actually keeping two
+            // every time we select a read to keep we are actually keeping two
             // reads. This results in higher coverage in the calibrated sequin
             // regions compared to the sample region. I'm dividing by 2 as a
             // quick and dirty adjustment; it gives a sequin coverage that is
@@ -1002,6 +1012,7 @@ mod tests {
             exclude_uncalibrated_reads: false,
             experimental: false,
             summary_report: None,
+            reference: None,
         }
     }
 
