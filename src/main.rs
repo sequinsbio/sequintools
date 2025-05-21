@@ -65,7 +65,8 @@ pub struct CalibrateArgs {
     #[arg(short, long)]
     output: Option<String>,
 
-    /// Reference sequence FASTA file. Used when input is CRAM format.
+    /// Reference sequence FASTA file. This flag is required when the input is
+    /// in CRAM format.
     #[arg(short = 'T', long = "reference")]
     reference: Option<String>,
 
