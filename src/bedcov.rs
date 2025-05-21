@@ -204,8 +204,7 @@ mod tests {
         let mut buffer = Vec::new();
         let bam_path = &get_test_path("bam");
         let bed_path = &get_test_path("bed");
-        let reference_path = None;
-        let result = bedcov_report(bam_path, bed_path, 0, 0, 8_000, reference_path, &mut buffer);
+        let result = bedcov_report(bam_path, bed_path, 0, 0, 8_000, None, &mut buffer);
         assert!(result.is_ok());
 
         // Compare the report with the expected
