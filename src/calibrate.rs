@@ -217,6 +217,10 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
 
     let mut bam = bam::IndexedReader::from_path(&args.path)
         .with_context(|| "Failed to open input bam file")?;
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    bam.set_threads(ncpus)?;
     let header = bam::Header::from_template(bam.header());
     let mut out = match &args.output {
         Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
@@ -271,20 +275,36 @@ fn write_summary_report(
         "calibrated_coverage",
     ])?;
 
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+
+    let mut bam = args
+        .output
+        .as_ref()
+        .map(IndexedReader::from_path)
+        .transpose()
+        .with_context(|| "Failed to open BAM file")?;
+    if let Some(b) = bam.as_mut() {
+        b.set_threads(ncpus)
+            .with_context(|| "Failed to set thread count for BAM reader")?;
+    }
+    let flank = if args.sample_bed.is_some() {
+        0
+    } else {
+        args.flank
+    };
+
     for result in calibration_results {
         let region = &result.region;
         // How can we compute the calibrated coverage if no file is written (i.e., it's being
         // piped)
-        if let Some(path) = &args.output {
-            let mut bam = IndexedReader::from_path(path)?;
-            let flank = if args.sample_bed.is_some() {
-                0
-            } else {
-                args.flank
-            };
-            result.calibrated_coverage =
-                mean_depth(&mut bam, region, flank, args.min_mapq, PILEUP_MAX_DEPTH)?.mean;
-        }
+        result.calibrated_coverage = bam
+            .as_mut()
+            .map(|b| mean_depth(b, region, flank, args.min_mapq, PILEUP_MAX_DEPTH))
+            .transpose()?
+            .map(|d| d.mean)
+            .unwrap_or(0.0);
 
         writer.write_record(&[
             region.name.clone(),
@@ -653,6 +673,10 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
     let mut bam =
         bam::IndexedReader::from_path(&args.path).with_context(|| "Failed to open input bam")?;
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    bam.set_threads(ncpus)?;
     {
         let header = bam::Header::from_template(bam.header());
         let mut out = match &args.output {
@@ -1020,6 +1044,20 @@ mod tests {
     }
 
     #[test]
+    fn test_write_summary_report_with_sample() {
+        let mut args = mock_calibrate_args(true, false);
+        args.summary_report = Some(
+            NamedTempFile::new()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .into_owned(),
+        );
+        let result = write_summary_report(&mut [], &args);
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn test_write_summary_report_with_output() {
         let mut args = mock_calibrate_args(false, false);
         args.output = Some("testdata/calibrated.bam".to_string());
@@ -1099,6 +1137,21 @@ mod tests {
             ])
         );
         assert!(records.next().is_none());
+    }
+
+    #[test]
+    fn test_write_summary_report_missing_output() {
+        let mut args = mock_calibrate_args(false, false);
+        args.output = Some("does-not-exist".to_string());
+        args.summary_report = Some(
+            NamedTempFile::new()
+                .unwrap()
+                .path()
+                .to_string_lossy()
+                .into_owned(),
+        );
+        let result = write_summary_report(&mut [], &args);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -1433,5 +1486,13 @@ mod tests {
         args.experimental = true;
         let result = calibrate(args);
         assert!(result.is_err(), "{:?}", result);
+    }
+
+    #[test]
+    fn test_calibrate_by_standard_coverage_missing_bam() {
+        let mut args = mock_calibrate_args(false, true);
+        args.path = "does-not-exist".to_string();
+        let result = calibrate_by_standard_coverage(args);
+        assert!(result.is_err());
     }
 }

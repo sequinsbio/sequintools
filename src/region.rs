@@ -188,7 +188,7 @@ mod tests {
     struct ErrorReader;
     impl Read for ErrorReader {
         fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
-            Err(io::Error::new(io::ErrorKind::Other, "bad read"))
+            Err(io::Error::other("bad read"))
         }
     }
     #[test]
