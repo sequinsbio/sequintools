@@ -291,9 +291,6 @@ fn write_summary_report(
     if let Some(b) = bam.as_mut() {
         b.set_threads(ncpus)
             .with_context(|| "Failed to set thread count for BAM reader")?;
-        if let Some(reference) = args.reference.as_ref() {
-            b.set_reference(reference)?;
-        }
     }
 
     let flank = if args.sample_bed.is_some() {
@@ -981,6 +978,9 @@ mod tests {
 
     const TEST_BAM_PATH: &str = "testdata/sim_R.bam";
     const TEST_BED_PATH: &str = "testdata/region_test.bed";
+    const TEST_CRAM_PATH: &str = "testdata/calibrated.cram";
+    const TEST_CRAM_REF_PATH: &str = "testdata/reference.fasta";
+    const TEST_CRAM_BED_PATH: &str = "testdata/cram_regions.bed";
 
     fn mock_calibrate_args(with_sample: bool, need_output: bool) -> CalibrateArgs {
         CalibrateArgs {
@@ -1395,6 +1395,20 @@ mod tests {
     }
 
     #[test]
+    fn test_calibrate_by_sample_coverage_cram() {
+        let mut args = mock_calibrate_args(true, true);
+        let out_path = args.output.clone().unwrap();
+        args.path = TEST_CRAM_PATH.to_string();
+        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
+        args.bed = TEST_CRAM_BED_PATH.to_string();
+        args.sample_bed = Some(TEST_CRAM_BED_PATH.to_string());
+        let result = calibrate_by_sample_coverage(args);
+        assert!(result.is_ok());
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
+    }
+
+    #[test]
     fn test_calibrate_by_standard_coverage() {
         // Working correctly with expected args
         let args_expected = mock_calibrate_args(false, true);
@@ -1408,6 +1422,20 @@ mod tests {
         assert!(metadata.len() > 0, "Output BAM file should not be empty");
 
         // TODO: check the output BAM
+    }
+
+    #[test]
+    fn test_calibrate_by_standard_coverage_cram() {
+        let mut args = mock_calibrate_args(true, true);
+        let out_path = args.output.clone().unwrap();
+        args.path = TEST_CRAM_PATH.to_string();
+        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
+        args.bed = TEST_CRAM_BED_PATH.to_string();
+        let result = calibrate_by_standard_coverage(args);
+        eprintln!("{:?}", result);
+        assert!(result.is_ok());
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
     }
 
     #[test]
