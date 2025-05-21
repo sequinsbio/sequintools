@@ -217,7 +217,13 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
 
     let mut bam = bam::IndexedReader::from_path(&args.path)
         .with_context(|| "Failed to open input bam file")?;
-    initialise_bam(&mut bam, args.reference.clone())?;
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    bam.set_threads(ncpus)?;
+    if let Some(reference) = args.reference.as_ref() {
+        bam.set_reference(reference)?;
+    }
     let header = bam::Header::from_template(bam.header());
     let mut out = match &args.output {
         Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
@@ -272,6 +278,10 @@ fn write_summary_report(
         "calibrated_coverage",
     ])?;
 
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+
     let mut bam = args
         .output
         .as_ref()
@@ -279,7 +289,8 @@ fn write_summary_report(
         .transpose()
         .with_context(|| "Failed to open BAM file")?;
     if let Some(b) = bam.as_mut() {
-        initialise_bam(b, None)?;
+        b.set_threads(ncpus)
+            .with_context(|| "Failed to set thread count for BAM reader")?;
     }
 
     let flank = if args.sample_bed.is_some() {
@@ -666,7 +677,13 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     let regions = region::load_from_bed(&mut io::BufReader::new(File::open(&args.bed)?))?;
     let mut bam =
         bam::IndexedReader::from_path(&args.path).with_context(|| "Failed to open input bam")?;
-    initialise_bam(&mut bam, args.reference.clone())?;
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    bam.set_threads(ncpus)?;
+    if let Some(reference) = args.reference.as_ref() {
+        bam.set_reference(reference)?;
+    }
     {
         let header = bam::Header::from_template(bam.header());
         let mut out = match &args.output {
@@ -940,18 +957,6 @@ fn calibrated_contigs(path: &str) -> Result<HashSet<String>> {
         contigs.insert(region.contig.to_owned());
     }
     Ok(contigs)
-}
-
-/// Initialise the BAM reader with the specified reference and number of threads.
-pub fn initialise_bam(bam: &mut IndexedReader, reference_path: Option<String>) -> Result<()> {
-    let ncpus = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1);
-    bam.set_threads(ncpus)?;
-    if let Some(reference) = reference_path {
-        bam.set_reference(reference)?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

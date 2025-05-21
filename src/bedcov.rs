@@ -1,4 +1,4 @@
-use crate::calibrate::{initialise_bam, mean_depth, DepthResult};
+use crate::calibrate::{mean_depth, DepthResult};
 use crate::region::{load_from_bed, Region};
 use crate::BedcovArgs;
 use anyhow::Result;
@@ -54,7 +54,6 @@ fn bedcov_report<W: Write>(
     dest: W,
 ) -> Result<()> {
     let mut bam = bam::IndexedReader::from_path(bam_path)?;
-    initialise_bam(&mut bam, reference_path.clone())?;
     let ncpus = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1);
@@ -205,7 +204,8 @@ mod tests {
         let mut buffer = Vec::new();
         let bam_path = &get_test_path("bam");
         let bed_path = &get_test_path("bed");
-        let result = bedcov_report(bam_path, bed_path, 0, 0, 8_000, None, &mut buffer);
+        let reference_path = None;
+        let result = bedcov_report(bam_path, bed_path, 0, 0, 8_000, reference_path, &mut buffer);
         assert!(result.is_ok());
 
         // Compare the report with the expected
