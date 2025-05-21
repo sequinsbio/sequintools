@@ -221,6 +221,9 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         .map(|n| n.get())
         .unwrap_or(1);
     bam.set_threads(ncpus)?;
+    if let Some(reference) = args.reference.as_ref() {
+        bam.set_reference(reference)?;
+    }
     let header = bam::Header::from_template(bam.header());
     let mut out = match &args.output {
         Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
@@ -289,6 +292,7 @@ fn write_summary_report(
         b.set_threads(ncpus)
             .with_context(|| "Failed to set thread count for BAM reader")?;
     }
+
     let flank = if args.sample_bed.is_some() {
         0
     } else {
@@ -677,6 +681,9 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
         .map(|n| n.get())
         .unwrap_or(1);
     bam.set_threads(ncpus)?;
+    if let Some(reference) = args.reference.as_ref() {
+        bam.set_reference(reference)?;
+    }
     {
         let header = bam::Header::from_template(bam.header());
         let mut out = match &args.output {
@@ -790,7 +797,7 @@ fn calibrate_regions(
             let window_end = window_beg + args.window_size - 1;
 
             // We are always keeping both reads from paired-end data, so
-            // ever  ytime we select a read to keep we are actually keeping two
+            // every time we select a read to keep we are actually keeping two
             // reads. This results in higher coverage in the calibrated sequin
             // regions compared to the sample region. I'm dividing by 2 as a
             // quick and dirty adjustment; it gives a sequin coverage that is
@@ -971,6 +978,9 @@ mod tests {
 
     const TEST_BAM_PATH: &str = "testdata/sim_R.bam";
     const TEST_BED_PATH: &str = "testdata/region_test.bed";
+    const TEST_CRAM_PATH: &str = "testdata/calibrated.cram";
+    const TEST_CRAM_REF_PATH: &str = "testdata/reference.fasta";
+    const TEST_CRAM_BED_PATH: &str = "testdata/cram_regions.bed";
 
     fn mock_calibrate_args(with_sample: bool, need_output: bool) -> CalibrateArgs {
         CalibrateArgs {
@@ -1002,6 +1012,7 @@ mod tests {
             exclude_uncalibrated_reads: false,
             experimental: false,
             summary_report: None,
+            reference: None,
         }
     }
 
@@ -1384,6 +1395,20 @@ mod tests {
     }
 
     #[test]
+    fn test_calibrate_by_sample_coverage_cram() {
+        let mut args = mock_calibrate_args(true, true);
+        let out_path = args.output.clone().unwrap();
+        args.path = TEST_CRAM_PATH.to_string();
+        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
+        args.bed = TEST_CRAM_BED_PATH.to_string();
+        args.sample_bed = Some(TEST_CRAM_BED_PATH.to_string());
+        let result = calibrate_by_sample_coverage(args);
+        assert!(result.is_ok());
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
+    }
+
+    #[test]
     fn test_calibrate_by_standard_coverage() {
         // Working correctly with expected args
         let args_expected = mock_calibrate_args(false, true);
@@ -1397,6 +1422,19 @@ mod tests {
         assert!(metadata.len() > 0, "Output BAM file should not be empty");
 
         // TODO: check the output BAM
+    }
+
+    #[test]
+    fn test_calibrate_by_standard_coverage_cram() {
+        let mut args = mock_calibrate_args(true, true);
+        let out_path = args.output.clone().unwrap();
+        args.path = TEST_CRAM_PATH.to_string();
+        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
+        args.bed = TEST_CRAM_BED_PATH.to_string();
+        let result = calibrate_by_standard_coverage(args);
+        assert!(result.is_ok());
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
     }
 
     #[test]

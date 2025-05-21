@@ -65,6 +65,10 @@ pub struct CalibrateArgs {
     #[arg(short, long)]
     output: Option<String>,
 
+    /// Reference sequence FASTA file. Used when input is CRAM format.
+    #[arg(short = 'T', long = "reference")]
+    reference: Option<String>,
+
     path: String,
 }
 
@@ -82,6 +86,10 @@ pub struct BedcovArgs {
     /// to the highest possible value, effectively removing the depth limit.
     #[arg(short = 'd', long = "max-depth", default_value_t = 8_000)]
     max_depth: u32,
+
+    /// Reference sequence FASTA file. Used when input is CRAM format.
+    #[arg(short = 'T', long = "reference")]
+    reference: Option<String>,
 
     bed_path: String,
     bam_path: String,
