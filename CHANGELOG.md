@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.0](https://github.com/sequinsbio/sequintools/compare/v0.6.1...v0.7.0) (2025-05-22)
+
+
+### Features
+
+* allow CRAM input files ([#198](https://github.com/sequinsbio/sequintools/issues/198)) ([53b1a98](https://github.com/sequinsbio/sequintools/commit/53b1a98f969eb387d691fac554978a2f0460febf)), closes [#179](https://github.com/sequinsbio/sequintools/issues/179)
+* calibrate by region mean depth with sample bed ([#192](https://github.com/sequinsbio/sequintools/issues/192)) ([e94edc3](https://github.com/sequinsbio/sequintools/commit/e94edc3b088494a94a83b2fbe3bea990858e1c46))
+* use multi threads when reading bams ([#194](https://github.com/sequinsbio/sequintools/issues/194)) ([03c9755](https://github.com/sequinsbio/sequintools/commit/03c9755c58ac52f17a0bafb80a79891289b0b5f7))
+
 ## [0.6.1](https://github.com/sequinsbio/sequintools/compare/v0.6.0...v0.6.1) (2025-05-13)
 
 
