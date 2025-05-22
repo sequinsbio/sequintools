@@ -7,6 +7,7 @@ publish = true
 description = "A suite of tools for manipulating and reporting on NGS data that has sequins added to the sample."
 readme = "README.md"
 repository = "https://github.com/sequinsbio/sequintools"
+exclude = ["example"]
 
 [[bin]]
 name = "sequintools"
