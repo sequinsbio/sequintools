@@ -25,6 +25,7 @@
 //!
 //! let args = CalibrateArgs {
 //!     // ... configure arguments
+//!     cram: false,
 //! };
 //!
 //! match calibrate::calibrate(args) {
@@ -119,6 +120,7 @@ const PILEUP_MAX_DEPTH: u32 = i32::MAX as u32;
 ///     sample_bed: None,
 ///     fold_coverage: 30,
 ///     // ... other fields
+///     cram: false,
 /// };
 ///
 /// match calibrate(args) {
@@ -186,6 +188,7 @@ pub fn calibrate(args: CalibrateArgs) -> Result<()> {
 ///     sample_bed: None,
 ///     fold_coverage: 30,
 ///     // ... other fields
+///     cram: false,
 /// };
 ///
 /// calibrate_by_standard_coverage(args)?;
@@ -228,9 +231,14 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
         bam.set_reference(reference)?;
     }
     let header = bam::Header::from_template(bam.header());
+    let format = if args.cram {
+        bam::Format::Cram
+    } else {
+        bam::Format::Bam
+    };
     let mut out = match &args.output {
-        Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam)?,
-        None => bam::Writer::from_stdout(&header, bam::Format::Bam)?,
+        Some(path) => bam::Writer::from_path(path, &header, format)?,
+        None => bam::Writer::from_stdout(&header, format)?,
     };
 
     // This assumes that the decoy chromosome is the last one in the BAM file.
@@ -662,6 +670,7 @@ pub fn mean_depth(
 ///     output: Some("output.bam".to_string()),
 ///     sample_bed: Some("sample.bed".to_string()),
 ///     // ... other fields
+///     cram: false,
 /// };
 ///
 /// calibrate_by_sample_coverage(args)?;
@@ -673,6 +682,10 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
             "Cannot use sample coverage calibration when sample_bed file is not provided.",
         )
         .into());
+    }
+
+    if args.cram && args.reference.is_none() {
+        bail!("--cram output requires --reference to be supplied");
     }
 
     let cal_contigs = calibrated_contigs(&args.bed)?;
@@ -689,9 +702,14 @@ fn calibrate_by_sample_coverage(args: CalibrateArgs) -> Result<()> {
     }
     {
         let header = bam::Header::from_template(bam.header());
+        let format = if args.cram {
+            bam::Format::Cram
+        } else {
+            bam::Format::Bam
+        };
         let mut out = match &args.output {
-            Some(path) => bam::Writer::from_path(path, &header, bam::Format::Bam).unwrap(),
-            None => bam::Writer::from_stdout(&header, bam::Format::Bam).unwrap(),
+            Some(path) => bam::Writer::from_path(path, &header, format)?,
+            None => bam::Writer::from_stdout(&header, format)?,
         };
 
         let hdr = bam.header().clone();
@@ -1016,6 +1034,7 @@ mod tests {
             experimental: false,
             summary_report: None,
             reference: None,
+            cram: false,
         }
     }
 
@@ -1535,5 +1554,34 @@ mod tests {
         args.path = "does-not-exist".to_string();
         let result = calibrate_by_standard_coverage(args);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_calibrated_by_standard_coverage_cram_output() {
+        let mut args = mock_calibrate_args(true, true);
+        args.path = TEST_CRAM_PATH.to_string();
+        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
+        args.bed = TEST_CRAM_BED_PATH.to_string();
+        args.cram = true;
+        let out_path = args.output.clone().unwrap();
+        let result = calibrate_by_standard_coverage(args);
+        assert!(result.is_ok());
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
+    }
+
+    #[test]
+    fn test_calibrate_by_sample_coverage_cram_output() {
+        let mut args = mock_calibrate_args(true, true);
+        args.path = TEST_CRAM_PATH.to_string();
+        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
+        args.bed = TEST_CRAM_BED_PATH.to_string();
+        args.sample_bed = Some(TEST_CRAM_BED_PATH.to_string());
+        args.cram = true;
+        let out_path = args.output.clone().unwrap();
+        let result = calibrate_by_sample_coverage(args);
+        assert!(result.is_ok());
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
     }
 }
