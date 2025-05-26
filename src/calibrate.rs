@@ -1552,4 +1552,33 @@ mod tests {
         let result = calibrate_by_standard_coverage(args);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_calibrated_by_standard_coverage_cram_output() {
+        let mut args = mock_calibrate_args(true, true);
+        args.path = TEST_CRAM_PATH.to_string();
+        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
+        args.bed = TEST_CRAM_BED_PATH.to_string();
+        args.cram = true;
+        let out_path = args.output.clone().unwrap();
+        let result = calibrate_by_standard_coverage(args);
+        assert!(result.is_ok());
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
+    }
+
+    #[test]
+    fn test_calibrate_by_sample_coverage_cram_output() {
+        let mut args = mock_calibrate_args(true, true);
+        args.path = TEST_CRAM_PATH.to_string();
+        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
+        args.bed = TEST_CRAM_BED_PATH.to_string();
+        args.sample_bed = Some(TEST_CRAM_BED_PATH.to_string());
+        args.cram = true;
+        let out_path = args.output.clone().unwrap();
+        let result = calibrate_by_sample_coverage(args);
+        assert!(result.is_ok());
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
+    }
 }
