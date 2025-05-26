@@ -69,6 +69,10 @@ pub struct CalibrateArgs {
     #[arg(short = 'T', long = "reference")]
     reference: Option<String>,
 
+    /// Write output as CRAM (requires --reference)
+    #[arg(short = 'C', long = "cram", default_value_t = false)]
+    cram: bool,
+
     path: String,
 }
 
