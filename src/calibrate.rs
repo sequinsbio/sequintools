@@ -127,6 +127,9 @@ const PILEUP_MAX_DEPTH: u32 = i32::MAX as u32;
 /// }
 /// ```
 pub fn calibrate(args: CalibrateArgs) -> Result<()> {
+    if args.summary_report.is_some() && !args.write_index {
+        bail!("Cannot write summary report without writing BAM index. Set --write-index to true.");
+    }
     if args.experimental {
         return calibrate_by_sample_coverage(args);
     }
