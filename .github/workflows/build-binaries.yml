@@ -1,0 +1,57 @@
+name: Build binaries
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-upload:
+    name: Build and upload binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - build: linux
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - build: macos
+            os: macos-latest
+            target: aarch64-apple-darwin
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.86.0
+        with:
+          targets: ${{ matrix.target }}
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build binary
+        run: cargo build --verbose --locked --release --target ${{ matrix.target }}
+
+      - name: Build archive
+        shell: bash
+        run: |
+          binary_name="sequintools"
+          version="${{ github.ref_name }}"
+          version="${version#v}"
+          archive_name="${binary_name}-${version}-${{ matrix.target }}.tar.gz"
+          dirname="${binary_name}-${version}-${{ matrix.target }}"
+          mkdir "$dirname"
+          cp "target/${{ matrix.target }}/release/$binary_name" "$dirname"
+          tar -czf "$archive_name" "$dirname"
+          echo "ASSET=$archive_name" >> $GITHUB_ENV
+
+      - name: Generate checksum
+        shell: bash
+        run: |
+          shasum -a 256 "${{ env.ASSET }}" > "${{ env.ASSET }}.sha256"
+          echo "CHECKSUM=${{ env.ASSET }}.sha256" >> $GITHUB_ENV
+
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.SEQUINS_BOT_ACCESS_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" "${{ env.ASSET }}" "${{ env.CHECKSUM }}"
