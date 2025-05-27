@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/sequinsbio/sequintools/compare/v0.7.0...v0.8.0) (2025-05-27)
+
+
+### Features
+
+* add support for CRAM output ([#202](https://github.com/sequinsbio/sequintools/issues/202)) ([9021048](https://github.com/sequinsbio/sequintools/commit/9021048aa066516a7f03211aacfa0b1fe8c051b7)), closes [#199](https://github.com/sequinsbio/sequintools/issues/199)
+
+
+### Bug Fixes
+
+* abort when summary requested without index ([#201](https://github.com/sequinsbio/sequintools/issues/201)) ([5df5059](https://github.com/sequinsbio/sequintools/commit/5df50590810c867d5fc50f771082fd3a9dd97656))
+* reduce crate size to complie with crates.io restrictions ([#200](https://github.com/sequinsbio/sequintools/issues/200)) ([f10d6b1](https://github.com/sequinsbio/sequintools/commit/f10d6b16635b14e5256bc7116625e80355f86613))
+
 ## [0.7.0](https://github.com/sequinsbio/sequintools/compare/v0.6.1...v0.7.0) (2025-05-22)
 
 
