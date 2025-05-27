@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/sequinsbio/sequintools/compare/v0.8.0...v0.8.1) (2025-05-27)
+
+
+### Bug Fixes
+
+* **ci:** add musl dependencies to build ([#206](https://github.com/sequinsbio/sequintools/issues/206)) ([dc58325](https://github.com/sequinsbio/sequintools/commit/dc58325bccce040ab50bb1e4f65a42dcd09fcb7e))
+
 ## [0.8.0](https://github.com/sequinsbio/sequintools/compare/v0.7.0...v0.8.0) (2025-05-27)
 
 
