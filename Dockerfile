@@ -20,15 +20,15 @@ COPY ./src ./src
 RUN cargo build --release
 
 # Stage 2: Create final Docker image with debian-slim.
-FROM ghcr.io/linuxcontainers/debian-slim:12.5
+FROM debian:12.11-slim
 
 # Augment debian-slim with tools needed to run in nextflow
 RUN apt-get update && \
-    apt-get --no-install-recommends install -y --force-yes \
-      procps=2:4.0.2-3 && \
-    apt-get clean autoclean && \
-    apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/*
+  apt-get --no-install-recommends install -y --force-yes \
+  procps=2:4.0.2-3 && \
+  apt-get clean autoclean && \
+  apt-get autoremove -y && \
+  rm -rf /var/lib/apt/lists/*
 
 # Copy app and test data.
 COPY --from=builder /usr/sequins/target/release/sequintools /usr/local/bin/sequintools
