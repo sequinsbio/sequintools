@@ -6,7 +6,7 @@ on:
 jobs:
   build-and-upload:
     name: Build and upload binaries
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
@@ -25,7 +25,6 @@ jobs:
         uses: dtolnay/rust-toolchain@1.86.0
         with:
           targets: ${{ matrix.target }}
-          components: clippy, rustfmt
 
       - name: Install musl tools
         if: matrix.target == 'x86_64-unknown-linux-musl'
