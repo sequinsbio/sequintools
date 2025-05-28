@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/sequinsbio/sequintools/compare/v0.8.1...v0.8.2) (2025-05-28)
+
+
+### Bug Fixes
+
+* **ci:** run builds on correct OS ([#208](https://github.com/sequinsbio/sequintools/issues/208)) ([58632f6](https://github.com/sequinsbio/sequintools/commit/58632f6354a32de51b49280d88cfad8d9d42922f))
+
 ## [0.8.1](https://github.com/sequinsbio/sequintools/compare/v0.8.0...v0.8.1) (2025-05-27)
 
 
