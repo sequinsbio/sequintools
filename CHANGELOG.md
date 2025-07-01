@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/sequinsbio/sequintools/compare/v0.8.2...v0.8.3) (2025-07-01)
+
+
+### Bug Fixes
+
+* **deps:** bump clap from 4.5.38 to 4.5.40 ([#211](https://github.com/sequinsbio/sequintools/issues/211)) ([b425620](https://github.com/sequinsbio/sequintools/commit/b425620e46a3ab68bf16aea74f3d24a5d98fe49d))
+
 ## [0.8.2](https://github.com/sequinsbio/sequintools/compare/v0.8.1...v0.8.2) (2025-05-28)
 
 
