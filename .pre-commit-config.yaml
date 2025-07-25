@@ -28,6 +28,5 @@ repos:
     hooks:
       - id: fmt
         args: ["--all", "--", "--check"]
-      - id: cargo-check
       - id: clippy
         args: ["--all", "--all-features", "--tests", "--", "-D", "warnings"]
