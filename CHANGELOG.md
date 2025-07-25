@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.4](https://github.com/sequinsbio/sequintools/compare/v0.8.3...v0.8.4) (2025-07-22)
+
+
+### Bug Fixes
+
+* **deps:** bump clap from 4.5.40 to 4.5.41 ([#214](https://github.com/sequinsbio/sequintools/issues/214)) ([71a3c6a](https://github.com/sequinsbio/sequintools/commit/71a3c6a6c7cb40296adbccc346ce3e66db7f3c6d))
+* **deps:** bump rust-htslib from 0.49.0 to 0.50.0 ([#213](https://github.com/sequinsbio/sequintools/issues/213)) ([ebd0932](https://github.com/sequinsbio/sequintools/commit/ebd09328ba0eabe47f2d1ac9e1fbc063f580a377))
+
 ## [0.8.3](https://github.com/sequinsbio/sequintools/compare/v0.8.2...v0.8.3) (2025-07-01)
 
 
