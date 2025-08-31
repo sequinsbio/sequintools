@@ -27,7 +27,7 @@ RUN apt-get update && \
   apt-get --no-install-recommends install -y \
   procps=2:4.0.4-9 \
   samtools=1.21-1 && \
-  apt-get clean autoclean && \
+  apt-get clean && \
   apt-get autoremove -y && \
   rm -rf /var/lib/apt/lists/*
 
