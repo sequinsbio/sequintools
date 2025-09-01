@@ -95,6 +95,11 @@ pub struct BedcovArgs {
     #[arg(short = 'T', long = "reference")]
     reference: Option<String>,
 
+    /// List of coverage thresholds to include in the report. The report will include the
+    /// percentage of bases in each region with coverage greater than or equal to each threshold.
+    #[arg(short, long, value_delimiter = ',')]
+    thresholds: Option<Vec<u32>>,
+
     bed_path: String,
     bam_path: String,
 }
@@ -254,19 +259,5 @@ mod tests {
             }
             _ => panic!("Expected Bedcov command"),
         }
-    }
-
-    #[test]
-    #[ignore = "TODO: add required mocks."]
-    fn test_main_calibrate_execution() {
-        // Here you would typically mock the calibrate::calibrate function
-        // and assert it was called with the correct arguments.
-        // This requires additional setup with a mocking framework.
-    }
-
-    #[test]
-    #[ignore = "TODO: add required mocks."]
-    fn test_main_bedcov_execution() {
-        // Similarly, mock bedcov::bedcov and verify it was called correctly.
     }
 }

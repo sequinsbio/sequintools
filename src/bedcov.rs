@@ -19,10 +19,7 @@ const REPORT_HEADER: [&str; 10] = [
 ///
 /// # Arguments
 ///
-/// * `bam_path` - Path to the BAM file containing aligned reads
-/// * `bed_path` - Path to the BED file containing regions of interest
-/// * `min_mapq` - Minimum mapping quality threshold for reads to be considered
-/// * `flank` - Number of base pairs to extend regions on both sides
+/// * `args` - Configuration arguments wrapped in `BedcovArgs` struct.
 /// * `dest` - A writer implementing the `Write` trait where the report will be output
 ///
 /// # Returns
@@ -44,30 +41,33 @@ const REPORT_HEADER: [&str; 10] = [
 /// * `mean` - Mean depth across the region.
 /// * `std` - Standard deviation of the depth.
 /// * `cv` - Coefficient of variation of the depth.
-fn bedcov_report<W: Write>(
-    bam_path: &str,
-    bed_path: &str,
-    min_mapq: u8,
-    flank: i32,
-    max_depth: u32,
-    reference_path: Option<String>,
-    dest: W,
-) -> Result<()> {
-    let mut bam = bam::IndexedReader::from_path(bam_path)?;
+///
+/// For each threshold in the `args.thresholds` field, an additional column `pct_gt_{threshold}` is
+/// added. This is the percentage of bases in the region with coverage greater than or equal to the
+/// threshold.
+fn bedcov_report<W: Write>(args: BedcovArgs, dest: W) -> Result<()> {
+    let mut bam = bam::IndexedReader::from_path(args.bam_path)?;
     let ncpus = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1);
     bam.set_threads(ncpus)?;
-    if let Some(reference) = reference_path {
+    if let Some(reference) = args.reference {
         bam.set_reference(reference)?;
     }
-    let regions: Vec<Region> = load_from_bed(&mut io::BufReader::new(File::open(bed_path)?))?;
+    let regions: Vec<Region> = load_from_bed(&mut io::BufReader::new(File::open(args.bed_path)?))?;
 
+    let mut report_header: Vec<String> = REPORT_HEADER.iter().map(|s| s.to_string()).collect();
+    if let Some(thresholds) = &args.thresholds {
+        for threshold in thresholds {
+            let name = format!("pct_gt_{threshold}");
+            report_header.push(name);
+        }
+    }
     let mut wtr = csv::Writer::from_writer(dest);
-    wtr.write_record(REPORT_HEADER)?;
+    wtr.write_record(report_header)?;
     for region in &regions {
-        let depth_result = mean_depth(&mut bam, region, flank, min_mapq, max_depth)?;
-        let record = build_line_for_header(region, &depth_result)?;
+        let depth_result = mean_depth(&mut bam, region, args.flank, args.min_mapq, args.max_depth)?;
+        let record = build_line_for_header(region, &depth_result, &args.thresholds)?;
         wtr.write_record(record)?;
     }
     wtr.flush()?;
@@ -95,7 +95,11 @@ fn bedcov_report<W: Write>(
 /// # Errors
 ///
 /// This function will return an error if an unexpected header is encountered in the `REPORT_HEADER` array.
-fn build_line_for_header(region: &Region, depth_result: &DepthResult) -> Result<Vec<String>> {
+fn build_line_for_header(
+    region: &Region,
+    depth_result: &DepthResult,
+    thresholds: &Option<Vec<u32>>,
+) -> Result<Vec<String>> {
     let mut line = vec!["".to_string(); REPORT_HEADER.len()];
     for (i, header) in REPORT_HEADER.iter().enumerate() {
         line[i] = match *header {
@@ -111,6 +115,12 @@ fn build_line_for_header(region: &Region, depth_result: &DepthResult) -> Result<
             "cv" => depth_result.cv().unwrap_or(0.0).to_string(),
             _ => panic!("Unexpected header: {}", header),
         };
+    }
+
+    if let Some(thresholds) = thresholds {
+        for threshold in thresholds {
+            line.push(depth_result.thresholds(*threshold).to_string());
+        }
     }
     Ok(line)
 }
@@ -136,15 +146,7 @@ fn build_line_for_header(region: &Region, depth_result: &DepthResult) -> Result<
 /// * `Ok(())` - The report was successfully generated and written to stdout.
 /// * `Err(e)` - An error occurred during file processing or output operations.
 pub fn bedcov(args: BedcovArgs) -> Result<()> {
-    bedcov_report(
-        &args.bam_path,
-        &args.bed_path,
-        args.min_mapq,
-        args.flank,
-        args.max_depth,
-        args.reference,
-        io::stdout(),
-    )
+    bedcov_report(args, io::stdout())
 }
 
 #[cfg(test)]
@@ -166,7 +168,7 @@ mod tests {
             30.0,
             10,
         );
-        let line = build_line_for_header(&region, &depth_result).unwrap();
+        let line = build_line_for_header(&region, &depth_result, &None).unwrap();
 
         assert_eq!(
             line,
@@ -202,9 +204,16 @@ mod tests {
     #[test]
     fn bedcov_report_with_wtr() {
         let mut buffer = Vec::new();
-        let bam_path = &get_test_path("bam");
-        let bed_path = &get_test_path("bed");
-        let result = bedcov_report(bam_path, bed_path, 0, 0, 8_000, None, &mut buffer);
+        let args = BedcovArgs {
+            bam_path: get_test_path("bam"),
+            bed_path: get_test_path("bed"),
+            min_mapq: 0,
+            flank: 0,
+            max_depth: 8_000,
+            thresholds: None,
+            reference: None,
+        };
+        let result = bedcov_report(args, &mut buffer);
         assert!(result.is_ok());
 
         // Compare the report with the expected
@@ -223,10 +232,32 @@ mod tests {
             min_mapq: 0,
             flank: 0,
             max_depth: 8_000,
+            thresholds: None,
             reference: None,
         };
         let result = bedcov(args);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn bedcov_with_thresholds() {
+        let args = BedcovArgs {
+            bam_path: get_test_path("bam"),
+            bed_path: get_test_path("bed"),
+            min_mapq: 0,
+            flank: 0,
+            max_depth: 8_000,
+            thresholds: Some(vec![10, 20, 30, 40]),
+            reference: None,
+        };
+        let mut buffer = Vec::<u8>::new();
+        let result = bedcov_report(args, &mut buffer);
+        assert!(result.is_ok());
+        let output = String::from_utf8(buffer).unwrap();
+        assert!(output.contains("pct_gt_10"));
+        assert!(output.contains("pct_gt_20"));
+        assert!(output.contains("pct_gt_30"));
+        assert!(output.contains("pct_gt_40"));
     }
 
     #[test]
@@ -237,6 +268,7 @@ mod tests {
             min_mapq: 0,
             flank: 0,
             max_depth: 8_000,
+            thresholds: None,
             reference: None,
         };
         let result = bedcov(args);
@@ -251,6 +283,7 @@ mod tests {
             min_mapq: 0,
             flank: 0,
             max_depth: 8_000,
+            thresholds: None,
             reference: None,
         };
         let result = bedcov(args);
@@ -270,6 +303,7 @@ mod tests {
             min_mapq: 0,
             flank: 0,
             max_depth: 8_000,
+            thresholds: None,
             reference: Some(TEST_CRAM_REF_PATH.to_string()),
         };
         let result = bedcov(args);

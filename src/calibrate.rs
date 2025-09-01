@@ -516,6 +516,15 @@ impl DepthResult {
             _ => None,
         }
     }
+
+    pub fn thresholds(&self, threshold: u32) -> f64 {
+        let n = self.histogram.len();
+        if n == 0 {
+            return 0.0;
+        }
+        let x = self.histogram.iter().filter(|x| x.1 >= threshold).count();
+        x as f64 / n as f64
+    }
 }
 
 /// Return the mean depth of a region from a BAM file. `flank` bases are removed
