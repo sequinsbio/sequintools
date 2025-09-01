@@ -58,10 +58,9 @@ fn bedcov_report<W: Write>(args: BedcovArgs, dest: W) -> Result<()> {
 
     let mut report_header: Vec<String> = REPORT_HEADER.iter().map(|s| s.to_string()).collect();
     if let Some(thresholds) = &args.thresholds {
-        // let thresholds = vec![10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
         for threshold in thresholds {
             let name = format!("pct_gt_{threshold}");
-            report_header.push(name.clone());
+            report_header.push(name);
         }
     }
     let mut wtr = csv::Writer::from_writer(dest);

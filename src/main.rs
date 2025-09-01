@@ -95,8 +95,8 @@ pub struct BedcovArgs {
     #[arg(short = 'T', long = "reference")]
     reference: Option<String>,
 
-    /// List of coverage thresholds to include in the report. The report will include the perectage
-    /// of bases in each region with coverage greater than or equal to each threshold.
+    /// List of coverage thresholds to include in the report. The report will include the
+    /// percentage of bases in each region with coverage greater than or equal to each threshold.
     #[arg(short, long, value_delimiter = ',')]
     thresholds: Option<Vec<u32>>,
 
