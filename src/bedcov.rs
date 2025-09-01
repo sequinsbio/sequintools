@@ -241,6 +241,27 @@ mod tests {
     }
 
     #[test]
+    fn bedcov_with_thresholds() {
+        let args = BedcovArgs {
+            bam_path: get_test_path("bam"),
+            bed_path: get_test_path("bed"),
+            min_mapq: 0,
+            flank: 0,
+            max_depth: 8_000,
+            thresholds: Some(vec![10, 20, 30, 40]),
+            reference: None,
+        };
+        let mut buffer = Vec::<u8>::new();
+        let result = bedcov_report(args, &mut buffer);
+        assert!(result.is_ok());
+        let output = String::from_utf8(buffer).unwrap();
+        assert!(output.contains("pct_gt_10"));
+        assert!(output.contains("pct_gt_20"));
+        assert!(output.contains("pct_gt_30"));
+        assert!(output.contains("pct_gt_40"));
+    }
+
+    #[test]
     fn bedcov_with_wrong_bam_path() {
         let args = BedcovArgs {
             bam_path: "wrong_path.bam".to_owned(),
