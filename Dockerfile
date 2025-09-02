@@ -25,8 +25,9 @@ FROM debian:13.0-slim
 # Augment debian-slim with tools needed to run in nextflow
 RUN apt-get update && \
   apt-get --no-install-recommends install -y \
-  procps=2:4.0.4-9 && \
-  apt-get clean autoclean && \
+  procps=2:4.0.4-9 \
+  samtools=1.21-1 && \
+  apt-get clean && \
   apt-get autoremove -y && \
   rm -rf /var/lib/apt/lists/*
 
