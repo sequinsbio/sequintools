@@ -3,7 +3,6 @@ use clap::{Args, Parser, Subcommand};
 
 mod bedcov;
 mod calibrate;
-mod region;
 
 #[derive(Parser, Debug)]
 #[clap(version)]
