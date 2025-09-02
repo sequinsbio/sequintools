@@ -17,7 +17,7 @@
 //! ## Tests
 //!
 //! Contains unit tests for verifying the functionality of the `Region` struct and the `load_from_bed` function.
-use anyhow::{bail, Context, Result};
+use crate::errors::{Error, Result};
 use std::fmt;
 use std::io::Read;
 
@@ -61,26 +61,28 @@ pub fn load_from_bed<R: Read>(reader: &mut R) -> Result<Vec<Region>> {
     for (i, line) in contents.lines().enumerate() {
         let bits: Vec<&str> = line.split_whitespace().collect();
         let [contig, beg_str, end_str, name, ..] = bits[..] else {
-            bail!(
-                "Incorrect number of columns detected, expected >= 4 found {} (line = {})",
-                bits.len(),
-                i + 1
-            )
+            return Err(Error::BedInvalidRecord {
+                msg: format!(
+                    "Incorrect number of columns detected, expected >= 4 found {} (line = {})",
+                    bits.len(),
+                    i + 1
+                ),
+            });
         };
 
-        let beg: u64 = beg_str.parse().with_context(|| {
-            format!(
+        let beg: u64 = beg_str.parse().map_err(|_| Error::BedInvalidRecord {
+            msg: format!(
                 "Beg column is not an integer: is {} (line = {})",
                 bits[1],
                 i + 1
-            )
+            ),
         })?;
-        let end: u64 = end_str.parse().with_context(|| {
-            format!(
+        let end: u64 = end_str.parse().map_err(|_| Error::BedInvalidRecord {
+            msg: format!(
                 "End column is not an integer: is {} (line = {})",
                 bits[2],
                 i + 1
-            )
+            ),
         })?;
         result.push(Region {
             contig: contig.to_owned(),

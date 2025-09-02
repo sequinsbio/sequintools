@@ -54,7 +54,6 @@
 //!
 //! Ensure input BAM files are properly indexed before calibration.
 //! The module assumes 0-based coordinates in BED files.
-use crate::region::{self, Region};
 use crate::CalibrateArgs;
 use anyhow::{bail, Context, Result};
 use rand::seq::IteratorRandom;
@@ -62,6 +61,7 @@ use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
 use rust_htslib::bam::{IndexedReader, Writer};
 use rust_htslib::{bam, bam::Read};
+use sequintools::region::{self, Region};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::Error;
