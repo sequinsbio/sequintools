@@ -38,7 +38,6 @@
 use crate::errors::Result;
 use rust_htslib::bam::{FetchDefinition, HeaderView, IndexedReader, Read, Record};
 use std::path::Path;
-use std::path::PathBuf;
 
 /// A trait for reading BAM files, providing an interface for accessing records,
 /// headers, and controlling reading behavior.
@@ -91,7 +90,7 @@ pub struct HtslibBamReader {
 
 impl HtslibBamReader {
     /// Create a new HtslibBamReader from a file path
-    pub fn from_path(path: &PathBuf) -> Result<Self> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let reader = IndexedReader::from_path(path)?;
         Ok(Self { reader })
     }
@@ -169,9 +168,22 @@ impl MockBamReader {
 }
 
 #[cfg(test)]
+struct MockRecords<'a> {
+    records: std::slice::Iter<'a, Record>,
+}
+
+#[cfg(test)]
+impl<'a> Iterator for MockRecords<'a> {
+    type Item = std::result::Result<Record, rust_htslib::errors::Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.records.next().map(|r| Ok(r.clone()))
+    }
+}
+
+#[cfg(test)]
 impl BamReader for MockBamReader {
-    type RecordsIter<'a> =
-        std::vec::IntoIter<std::result::Result<Record, rust_htslib::errors::Error>>;
+    type RecordsIter<'a> = MockRecords<'a>;
 
     /// Returns a reference to the BAM header (not implemented for mock)
     fn header(&self) -> &HeaderView {
@@ -188,12 +200,9 @@ impl BamReader for MockBamReader {
 
     /// Returns an iterator over the mock records
     fn records(&mut self) -> Self::RecordsIter<'_> {
-        self.records
-            .clone()
-            .into_iter()
-            .map(Ok)
-            .collect::<Vec<_>>()
-            .into_iter()
+        MockRecords {
+            records: self.records.iter(),
+        }
     }
 
     /// Mock set_threads does nothing and always returns Ok
@@ -213,11 +222,12 @@ impl BamReader for MockBamReader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn test_htslibm_bam_reader_creation() {
         // This test requires an actual BAM file, so we'll test the error case
-        let result = HtslibBamReader::from_path(&PathBuf::from("nonexistent.bam"));
+        let result = HtslibBamReader::from_path(PathBuf::from("nonexistent.bam"));
         assert!(result.is_err());
     }
 
