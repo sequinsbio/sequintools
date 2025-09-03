@@ -162,12 +162,24 @@ pub struct MockBamReader {
 #[cfg(test)]
 impl MockBamReader {
     /// Create a new MockBamReader from a vector of records
-    pub fn new(records: Vec<Record>) -> Self {
+    pub fn new(
+        records: Vec<Record>,
+        header_records: Option<&[rust_htslib::bam::header::HeaderRecord]>,
+    ) -> Self {
         let mut header = rust_htslib::bam::Header::new();
 
-        header.push_record(&rust_htslib::bam::header::HeaderRecord::new(
-            b"SQ\tSN:chrQ_mirror\tLN:83800\n",
-        ));
+        match header_records {
+            Some(recs) => {
+                for rec in recs {
+                    header.push_record(rec);
+                }
+            }
+            None => {
+                header.push_record(&rust_htslib::bam::header::HeaderRecord::new(
+                    b"SQ\tSN:chrQ_mirror\tLN:83800\n",
+                ));
+            }
+        }
         let header_view = HeaderView::from_header(&header);
         Self {
             records,
@@ -243,7 +255,7 @@ mod tests {
     #[test]
     fn test_mock_bam_reader_basic() {
         let records = vec![];
-        let mut mock_reader = MockBamReader::new(records);
+        let mut mock_reader = MockBamReader::new(records, None);
 
         // Test that records iterator works (should be empty)
         let collected: Vec<_> = mock_reader.records().collect();
@@ -258,7 +270,7 @@ mod tests {
         record.set_pos(100);
 
         let records = vec![record];
-        let mut mock_reader = MockBamReader::new(records);
+        let mut mock_reader = MockBamReader::new(records, None);
 
         // Test that we get back our record
         let collected: Vec<_> = mock_reader.records().collect();
@@ -275,7 +287,7 @@ mod tests {
         }
 
         let records = vec![Record::new(), Record::new(), Record::new()];
-        let mock_reader = MockBamReader::new(records);
+        let mock_reader = MockBamReader::new(records, None);
 
         let count = process_bam_records(mock_reader);
         assert_eq!(count, 3);
@@ -283,7 +295,7 @@ mod tests {
 
     #[test]
     fn test_mock_bam_reader_methods_dont_error() {
-        let mut mock_reader = MockBamReader::new(vec![]);
+        let mut mock_reader = MockBamReader::new(vec![], None);
 
         // All these methods should succeed on mock
         assert!(mock_reader.set_threads(4).is_ok());

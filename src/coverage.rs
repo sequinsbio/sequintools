@@ -94,8 +94,27 @@ fn coverage_for_region<T: BamReader>(
     if let Some(reference) = reference {
         bam_reader.set_reference(reference)?;
     }
-    let beg = region.beg + flank;
-    let end = region.end - flank;
+    let beg = region.beg.checked_add(flank).ok_or_else(|| Error::Bedcov {
+        msg: format!(
+            "Region start + flank overflowed for region: {}:{}-{}",
+            region.contig, region.beg, region.end
+        ),
+    })?;
+    let end = region.end.checked_sub(flank).ok_or_else(|| Error::Bedcov {
+        msg: format!(
+            "Region end - flank underflowed for region: {}:{}-{}",
+            region.contig, region.beg, region.end
+        ),
+    })?;
+    if beg >= end {
+        return Err(Error::Bedcov {
+            msg: format!(
+                "Region start >= end after applying flank for region: {}:{}-{}",
+                region.contig, region.beg, region.end
+            ),
+        });
+    }
+
     let mut coverage = vec![0u32; (end - beg) as usize];
 
     let tid = bam_reader
@@ -324,7 +343,7 @@ region2,chr1,200,300,4,6,5.00,0.82,0.1633,1.00,1.00";
     #[test]
     fn test_coverage_for_region_empty() {
         let records = vec![];
-        let mut mock = MockBamReader::new(records);
+        let mut mock = MockBamReader::new(records, None);
         let region = Region::new("chrQ_mirror", 100, 200, "test_region");
         let result = coverage_for_region(&mut mock, &region, 0, 0, None);
         assert!(result.is_ok());
@@ -340,7 +359,7 @@ region2,chr1,200,300,4,6,5.00,0.82,0.1633,1.00,1.00";
         record.set_cigar(Some(&CigarString(vec![Cigar::Match(100)])));
         record.set_mapq(60);
         record.set_flags(99); // PAIRED,PROPER_PAIR,MREVERSE,READ1
-        let mut mock = MockBamReader::new(vec![record]);
+        let mut mock = MockBamReader::new(vec![record], None);
         let region = Region::new("chrQ_mirror", 100, 200, "test_region");
         let result = coverage_for_region(&mut mock, &region, 0, 0, None);
         assert!(result.is_ok());
@@ -357,7 +376,7 @@ region2,chr1,200,300,4,6,5.00,0.82,0.1633,1.00,1.00";
         record.set_cigar(Some(&CigarString(vec![Cigar::Match(100)])));
         record.set_mapq(60);
         record.set_flags(99); // PAIRED,PROPER_PAIR,MREVERSE,READ1
-        let mut mock = MockBamReader::new(vec![record]);
+        let mut mock = MockBamReader::new(vec![record], None);
         let region = Region::new("chr2", 100, 200, "test_region");
         let result = coverage_for_region(&mut mock, &region, 0, 0, None);
         assert!(result.is_err());
@@ -380,7 +399,7 @@ region2,chr1,200,300,4,6,5.00,0.82,0.1633,1.00,1.00";
         record3.set_flags(99); // PAIRED,PROPER_PAIR,MREVERSE,READ1
         record3.set_mapq(0);
 
-        let mut mock = MockBamReader::new(vec![record1, record2, record3]);
+        let mut mock = MockBamReader::new(vec![record1, record2, record3], None);
         let region = Region::new("chrQ_mirror", 100, 200, "test_region");
         let min_mapq = 20;
         let result = coverage_for_region(&mut mock, &region, min_mapq, 0, None);

@@ -110,6 +110,23 @@ enum Commands {
     Calibrate(CalibrateArgs),
     /// read depth per BED region
     Bedcov(BedcovArgs),
+
+    Bedcov2(BedcovArgs),
+}
+
+use sequintools::coverage;
+
+impl From<BedcovArgs> for coverage::BedcovArgs {
+    fn from(args: BedcovArgs) -> Self {
+        Self {
+            bam_path: args.bam_path.into(),
+            bed_path: args.bed_path.into(),
+            reference: args.reference.map(|s| s.into()),
+            min_mapq: args.min_mapq,
+            flank: args.flank as u64,
+            thresholds: args.thresholds,
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -117,6 +134,9 @@ fn main() -> Result<()> {
     match args.command {
         Commands::Calibrate(args) => calibrate::calibrate(args)?,
         Commands::Bedcov(args) => bedcov::bedcov(args)?,
+        Commands::Bedcov2(args) => {
+            coverage::run(&args.into())?;
+        }
     };
     Ok(())
 }
