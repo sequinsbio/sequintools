@@ -225,7 +225,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_htslibm_bam_reader_creation() {
+    fn test_htslib_bam_reader_creation() {
         // This test requires an actual BAM file, so we'll test the error case
         let result = HtslibBamReader::from_path(PathBuf::from("nonexistent.bam"));
         assert!(result.is_err());
