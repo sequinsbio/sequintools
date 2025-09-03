@@ -1,9 +1,12 @@
-/// Provides a trait and implementation for reading BAM files using the `rust-htslib` crate,
-/// enabling access to BAM records, headers, and region-based queries with multi-threading support.
+/// Provides a trait and implementation for reading BAM files using the
+/// `rust-htslib` crate, enabling access to BAM records, headers, and
+/// region-based queries with multi-threading support.
 ///
 /// # Overview
-/// - Defines the `BamReader` trait, which abstracts over BAM file reading functionality.
-/// - Implements `BamReader` for `HtslibBamReader`, a wrapper around `rust_htslib::bam::IndexedReader`.
+/// - Defines the `BamReader` trait, which abstracts over BAM file reading
+///   functionality.
+/// - Implements `BamReader` for `HtslibBamReader`, a wrapper around
+///   `rust_htslib::bam::IndexedReader`.
 /// - Includes a mock implementation for testing purposes.
 ///
 /// # Features
@@ -14,11 +17,12 @@
 /// - Reference genome specification with `set_reference`.
 ///
 /// # Usage
-/// Implement the `BamReader` trait for custom BAM readers, or use the provided `HtslibBamReader`
-/// for standard indexed BAM file access.
+/// Implement the `BamReader` trait for custom BAM readers, or use the provided
+/// `HtslibBamReader` for standard indexed BAM file access.
 ///
 /// # Testing
-/// Includes a `MockBamReader` for unit testing code that depends on the `BamReader` trait.
+/// Includes a `MockBamReader` for unit testing code that depends on the
+/// `BamReader` trait.
 ///
 /// # Dependencies
 /// - [rust-htslib](https://docs.rs/rust-htslib)
@@ -36,11 +40,12 @@ use rust_htslib::bam::{FetchDefinition, HeaderView, IndexedReader, Read, Record}
 use std::path::Path;
 use std::path::PathBuf;
 
-/// A trait for reading BAM files, providing an interface for accessing records, headers,
-/// and controlling reading behavior.
+/// A trait for reading BAM files, providing an interface for accessing records,
+/// headers, and controlling reading behavior.
 ///
-/// Types implementing this trait can iterate over records, fetch specific regions,
-/// set the number of threads for reading, and specify a reference genome.
+/// Types implementing this trait can iterate over records, fetch specific
+/// regions, set the number of threads for reading, and specify a reference
+/// genome.
 ///
 /// # Associated Types
 /// - `RecordsIter<'a>`: An iterator over `Result<Record, rust_htslib::errors::Error>`.
@@ -129,9 +134,10 @@ impl BamReader for HtslibBamReader {
 
 /// Mock implementation of a BAM reader for testing purposes.
 ///
-/// This struct simulates the behavior of a BAM/CRAM reader and is intended for use in unit tests
-/// where reading from actual files is not desired. It allows you to inject a vector of `Record`
-/// objects and provides the same trait interface as a real BAM reader.
+/// This struct simulates the behavior of a BAM/CRAM reader and is intended for
+/// use in unit tests where reading from actual files is not desired. It allows
+/// you to inject a vector of `Record` objects and provides the same trait
+/// interface as a real BAM reader.
 ///
 /// # Example
 ///
@@ -275,10 +281,24 @@ mod tests {
         assert!(mock_reader.fetch((0, 100, 200)).is_ok());
     }
 
+    // This exists because codecov doesn't like the fact that the real
+    // implementation isn't tested even though that's the point of the mock.
     #[test]
     fn test_htslib_bam_reader() {
         let bam_path = PathBuf::from("testdata/calibrated.bam");
         let mut reader = HtslibBamReader::from_path(&bam_path).expect("Failed to open BAM file");
+
+        assert!(reader.set_threads(2).is_ok(), "Failed to set threads");
+
+        let header = reader.header();
+        assert!(header.target_count() > 0, "Header has no targets");
+
+        let reference = PathBuf::from("testdata/reference.fasta");
+        assert!(
+            reader.set_reference(reference).is_ok(),
+            "Failed to set reference"
+        );
+
         reader
             .fetch(FetchDefinition::All)
             .expect("Failed to fetch all");
