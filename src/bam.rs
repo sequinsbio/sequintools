@@ -155,7 +155,7 @@ impl BamReader for HtslibBamReader {
 /// }
 /// ```
 #[cfg(test)]
-struct MockBamReader {
+pub struct MockBamReader {
     records: Vec<Record>,
 }
 
@@ -168,7 +168,7 @@ impl MockBamReader {
 }
 
 #[cfg(test)]
-struct MockRecords<'a> {
+pub struct MockRecords<'a> {
     records: std::slice::Iter<'a, Record>,
 }
 
