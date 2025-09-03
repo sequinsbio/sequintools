@@ -6,7 +6,7 @@ pub enum Error {
     BamFileNotFound,
     #[error("Invalid region specified")]
     InvalidRegion,
-    #[error("A unknown error occurred: {0}")]
+    #[error("An unknown error occurred: {0}")]
     Unknown(String),
 
     #[error("IO error: {0}")]
