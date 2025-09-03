@@ -131,7 +131,7 @@ impl BamReader for HtslibBamReader {
     }
 }
 
-/// Mock implementation of a BAM reader for testing purposes.
+/// Mock implementation of `BamReader` for testing purposes.
 ///
 /// This struct simulates the behavior of a BAM/CRAM reader and is intended for
 /// use in unit tests where reading from actual files is not desired. It allows
@@ -139,8 +139,7 @@ impl BamReader for HtslibBamReader {
 /// interface as a real BAM reader.
 ///
 /// # Example
-///
-/// ```
+/// ```ignore
 /// use crate::bam::{MockBamReader, BamReader};
 /// use rust_htslib::bam::Record;
 ///
@@ -157,13 +156,23 @@ impl BamReader for HtslibBamReader {
 #[cfg(test)]
 pub struct MockBamReader {
     records: Vec<Record>,
+    header: HeaderView,
 }
 
 #[cfg(test)]
 impl MockBamReader {
     /// Create a new MockBamReader from a vector of records
-    fn new(records: Vec<Record>) -> Self {
-        Self { records }
+    pub fn new(records: Vec<Record>) -> Self {
+        let mut header = rust_htslib::bam::Header::new();
+
+        header.push_record(&rust_htslib::bam::header::HeaderRecord::new(
+            b"SQ\tSN:chrQ_mirror\tLN:83800\n",
+        ));
+        let header_view = HeaderView::from_header(&header);
+        Self {
+            records,
+            header: header_view,
+        }
     }
 }
 
@@ -187,7 +196,7 @@ impl BamReader for MockBamReader {
 
     /// Returns a reference to the BAM header (not implemented for mock)
     fn header(&self) -> &HeaderView {
-        panic!("Mock header not implemented - use real BAM reader for header operations")
+        &self.header
     }
 
     /// Mock fetch does nothing and always returns Ok
@@ -270,15 +279,6 @@ mod tests {
 
         let count = process_bam_records(mock_reader);
         assert_eq!(count, 3);
-    }
-
-    #[test]
-    #[should_panic(expected = "Mock header not implemented")]
-    fn test_mock_bam_reader_header_panic() {
-        let mock_reader = MockBamReader::new(vec![]);
-
-        // This should panic since no header was provided
-        let _header = mock_reader.header();
     }
 
     #[test]
