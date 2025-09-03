@@ -64,7 +64,7 @@ impl RegionCoverage {
     /// Calculate the coefficient of variation (CV) of the coverage.
     fn cv(&self) -> Option<f32> {
         match (self.std(), self.mean()) {
-            (Some(sd), Some(mu)) => Some(sd / mu),
+            (Some(sd), Some(mu)) if mu > 0.0 => Some(sd / mu),
             _ => None,
         }
     }
@@ -215,8 +215,8 @@ fn write_csv<W: Write>(
             msg: "unable to calculate cv".to_string(),
         })?;
         let mut row = format!(
-            "{},{},{},{min},{max},{mean:.2},{std:.2},{cv:.4}",
-            coverage.region.contig, coverage.region.beg, coverage.region.end
+            "{},{},{},{},{min},{max},{mean:.2},{std:.2},{cv:.4}",
+            coverage.region.name, coverage.region.contig, coverage.region.beg, coverage.region.end,
         );
         if let Some(thresholds) = &thresholds {
             for thresh in thresholds {
@@ -280,8 +280,8 @@ mod tests {
 
         let expected = "\
 name,chrom,beg,end,min,max,mean,std,cv
-chr1,100,200,1,3,2.00,0.82,0.4082
-chr1,200,300,4,6,5.00,0.82,0.1633";
+region1,chr1,100,200,1,3,2.00,0.82,0.4082
+region2,chr1,200,300,4,6,5.00,0.82,0.1633";
         assert_eq!(String::from_utf8(output).unwrap().trim(), expected.trim());
     }
 
@@ -298,8 +298,8 @@ chr1,200,300,4,6,5.00,0.82,0.1633";
 
         let expected = "\
 name,chrom,beg,end,min,max,mean,std,cv,pct_gt_2,pct_gt_4
-chr1,100,200,1,3,2.00,0.82,0.4082,0.67,0.00
-chr1,200,300,4,6,5.00,0.82,0.1633,1.00,1.00";
+region1,chr1,100,200,1,3,2.00,0.82,0.4082,0.67,0.00
+region2,chr1,200,300,4,6,5.00,0.82,0.1633,1.00,1.00";
         assert_eq!(String::from_utf8(output).unwrap().trim(), expected.trim());
     }
 
