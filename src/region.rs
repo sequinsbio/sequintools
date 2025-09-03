@@ -36,6 +36,18 @@ pub struct Region {
     pub name: String,
 }
 
+impl Region {
+    /// Create a new Region instance.
+    pub fn new(contig: &str, beg: u64, end: u64, name: &str) -> Self {
+        Self {
+            contig: contig.to_owned(),
+            beg,
+            end,
+            name: name.to_owned(),
+        }
+    }
+}
+
 /// Impl Display for Region
 impl fmt::Display for Region {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
