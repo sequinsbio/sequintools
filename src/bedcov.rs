@@ -1,8 +1,8 @@
 use crate::calibrate::{mean_depth, DepthResult};
-use crate::region::{load_from_bed, Region};
 use crate::BedcovArgs;
 use anyhow::Result;
 use rust_htslib::bam::{self, Read};
+use sequintools::region::{load_from_bed, Region};
 use std::fs::File;
 use std::io::{self, Write};
 
