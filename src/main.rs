@@ -267,4 +267,25 @@ mod tests {
             _ => panic!("Expected Bedcov command"),
         }
     }
+
+    #[test]
+    fn test_bedcovarg_from() {
+        let input = BedcovArgs {
+            min_mapq: 0,
+            flank: 500,
+            reference: None,
+            thresholds: None,
+            bed_path: PathBuf::from("my.bed"),
+            bam_path: PathBuf::from("my.bam"),
+        };
+        let expected = sequintools::coverage::BedcovArgs {
+            min_mapq: 0,
+            flank: 500,
+            reference: None,
+            thresholds: None,
+            bed_path: PathBuf::from("my.bed"),
+            bam_path: PathBuf::from("my.bam"),
+        };
+        assert_eq!(sequintools::coverage::BedcovArgs::from(input), expected);
+    }
 }

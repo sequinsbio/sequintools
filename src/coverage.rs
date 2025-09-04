@@ -255,7 +255,7 @@ fn write_csv<W: Write>(
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct BedcovArgs {
     pub bam_path: PathBuf,
     pub bed_path: PathBuf,
