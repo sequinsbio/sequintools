@@ -337,9 +337,6 @@ region2,chr1,200,300,4,6,5.00,0.82,0.1633,1.00,1.00";
         }
     }
 
-    // We can't do this because the mock doesn't implement `header()` which
-    // `coverage_for_region` calls. Implementing this is non-trivial as we
-    // need to ensure lifetimes are correct.
     #[test]
     fn test_coverage_for_region_empty() {
         let records = vec![];
@@ -430,5 +427,47 @@ region2,chr1,200,300,4,6,5.00,0.82,0.1633,1.00,1.00";
         };
         let result = run(&args);
         assert!(result.is_ok(), "Failed to run bedcov: {result:?}");
+    }
+
+    #[test]
+    fn test_coverage_for_region_flank_overflow() {
+        let records = vec![];
+        let mut mock = MockBamReader::new(records, None);
+        let region = Region::new("chrQ_mirror", 100, 200, "test_region");
+        let flank = u64::MAX;
+        let result = coverage_for_region(&mut mock, &region, 0, flank, None);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Region start + flank overflowed for region"));
+    }
+
+    #[test]
+    fn test_coverage_for_region_flank_underflow() {
+        let records = vec![];
+        let mut mock = MockBamReader::new(records, None);
+        let region = Region::new("chrQ_mirror", u64::MIN, 200, "test_region");
+        let flank = u64::MAX - 10;
+        let result = coverage_for_region(&mut mock, &region, 0, flank, None);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Region end - flank underflowed for region"));
+    }
+
+    #[test]
+    fn test_coverage_for_region_flank_bigger_than_region() {
+        let records = vec![];
+        let mut mock = MockBamReader::new(records, None);
+        let region = Region::new("chrQ_mirror", 100, 200, "test_region");
+        let flank = 150;
+        let result = coverage_for_region(&mut mock, &region, 0, flank, None);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Region start >= end after applying flank for region"));
     }
 }
