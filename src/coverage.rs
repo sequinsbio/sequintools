@@ -218,36 +218,19 @@ fn write_csv<W: Write>(
     }
     writeln!(dest, "{}", columns.join(","))?;
     for coverage in coverages.iter() {
-        let min = coverage.min().ok_or_else(|| Error::Bedcov {
-            msg: "unable to calculate minimum".to_string(),
-        })?;
-        let max = coverage.max().ok_or_else(|| Error::Bedcov {
-            msg: "unable to calculate maximum".to_string(),
-        })?;
-        let mean = coverage.mean().ok_or_else(|| Error::Bedcov {
-            msg: "unable to calculate mean".to_string(),
-        })?;
-        let std = coverage.std().ok_or_else(|| Error::Bedcov {
-            msg: "unable to calculate std".to_string(),
-        })?;
-        let cv = coverage.cv().ok_or_else(|| Error::Bedcov {
-            msg: "unable to calculate cv".to_string(),
-        })?;
+        let min = coverage.min().unwrap_or(&0);
+        let max = coverage.max().unwrap_or(&0);
+        let mean = coverage.mean().unwrap_or(0.0);
+        let std = coverage.std().unwrap_or(0.0);
+        let cv = coverage.cv().unwrap_or(0.0);
         let mut row = format!(
-            "{},{},{},{},{min},{max},{mean:.2},{std:.2},{cv:.4}",
+            "{},{},{},{},{min},{max},{mean:.2},{std:.2},{cv:.2}",
             coverage.region.name, coverage.region.contig, coverage.region.beg, coverage.region.end,
         );
         if let Some(thresholds) = &thresholds {
             for thresh in thresholds {
-                let pct = coverage.percent_above_threshold(*thresh);
-                match pct {
-                    Some(value) => row.push_str(&format!(",{:.2}", value)),
-                    None => {
-                        return Err(Error::Bedcov {
-                            msg: format!("unable to calculate pct_gt_{}", thresh),
-                        })
-                    }
-                }
+                let pct = coverage.percent_above_threshold(*thresh).unwrap_or(0.0);
+                row.push_str(&format!(",{:.2}", pct));
             }
         }
         writeln!(dest, "{row}")?;
@@ -299,8 +282,8 @@ mod tests {
 
         let expected = "\
 name,chrom,beg,end,min,max,mean,std,cv
-region1,chr1,100,200,1,3,2.00,0.82,0.4082
-region2,chr1,200,300,4,6,5.00,0.82,0.1633";
+region1,chr1,100,200,1,3,2.00,0.82,0.41
+region2,chr1,200,300,4,6,5.00,0.82,0.16";
         assert_eq!(String::from_utf8(output).unwrap().trim(), expected.trim());
     }
 
@@ -317,24 +300,26 @@ region2,chr1,200,300,4,6,5.00,0.82,0.1633";
 
         let expected = "\
 name,chrom,beg,end,min,max,mean,std,cv,pct_gt_2,pct_gt_4
-region1,chr1,100,200,1,3,2.00,0.82,0.4082,0.67,0.00
-region2,chr1,200,300,4,6,5.00,0.82,0.1633,1.00,1.00";
+region1,chr1,100,200,1,3,2.00,0.82,0.41,0.67,0.00
+region2,chr1,200,300,4,6,5.00,0.82,0.16,1.00,1.00";
         assert_eq!(String::from_utf8(output).unwrap().trim(), expected.trim());
     }
 
     #[test]
     fn test_write_csv_no_coverage() {
         let coverages = vec![RegionCoverage::new("chr1", 100, 200, "region1", vec![])];
+        let expected = "\
+name,chrom,beg,end,min,max,mean,std,cv
+region1,chr1,100,200,0,0,0.00,0.00,0.00";
         let mut output = Vec::new();
         let result = write_csv(&coverages, None, &mut output);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        match err {
-            Error::Bedcov { msg } => {
-                assert_eq!(msg, "unable to calculate minimum");
-            }
-            _ => panic!("Expected Bedcov error"),
-        }
+        assert!(result.is_ok());
+        let output_str = String::from_utf8(output).unwrap();
+        assert_eq!(
+            output_str.trim(),
+            expected.trim(),
+            "Expected:\n{expected}\nGot:\n{output_str}"
+        );
     }
 
     #[test]
