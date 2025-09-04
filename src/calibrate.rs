@@ -464,67 +464,7 @@ fn copy_unmapped_reads(bam: &mut bam::IndexedReader, out: &mut bam::Writer) -> R
 }
 
 pub struct DepthResult {
-    pub histogram: Vec<(u32, u32)>,
     pub mean: f64,
-    len: u32,
-}
-
-impl DepthResult {
-    pub fn cv(&self) -> Option<f32> {
-        match (self.std(), self.mean()) {
-            (Some(sig), Some(mu)) => Some(sig / mu),
-            _ => None,
-        }
-    }
-
-    pub fn len(&self) -> i32 {
-        self.len as i32
-    }
-
-    pub fn min(&self) -> Option<i32> {
-        self.histogram.iter().map(|x| x.1 as i32).min()
-    }
-
-    pub fn max(&self) -> Option<i32> {
-        self.histogram.iter().map(|x| x.1 as i32).max()
-    }
-
-    pub fn mean(&self) -> Option<f32> {
-        let data: Vec<i32> = self.histogram.iter().map(|x| x.1 as i32).collect();
-        let sum = data.iter().sum::<i32>() as f32;
-        let count = data.len();
-        match count {
-            positive if positive > 0 => Some(sum / count as f32),
-            _ => None,
-        }
-    }
-
-    pub fn std(&self) -> Option<f32> {
-        let data: Vec<i32> = self.histogram.iter().map(|x| x.1 as i32).collect();
-        match (self.mean(), data.len()) {
-            (Some(data_mean), count) if count > 0 => {
-                let variance = data
-                    .iter()
-                    .map(|value| {
-                        let diff = data_mean - (*value as f32);
-                        diff * diff
-                    })
-                    .sum::<f32>()
-                    / count as f32;
-                Some(variance.sqrt())
-            }
-            _ => None,
-        }
-    }
-
-    pub fn thresholds(&self, threshold: u32) -> f64 {
-        let n = self.histogram.len();
-        if n == 0 {
-            return 0.0;
-        }
-        let x = self.histogram.iter().filter(|x| x.1 >= threshold).count();
-        x as f64 / n as f64
-    }
 }
 
 /// Return the mean depth of a region from a BAM file. `flank` bases are removed
@@ -620,14 +560,8 @@ pub fn mean_depth(
         xs.insert(pileup.pos(), depth);
         total += depth;
     }
-    let mut hist = vec![(0, 0); len as usize];
-    for (i, pos) in (beg..end).enumerate() {
-        hist[i] = (pos, xs.get(&pos).copied().unwrap_or(0));
-    }
     Ok(DepthResult {
-        histogram: hist,
         mean: total as f64 / len as f64,
-        len,
     })
 }
 
@@ -990,18 +924,6 @@ fn calibrated_contigs(path: &str) -> Result<HashSet<String>> {
 }
 
 #[cfg(test)]
-impl DepthResult {
-    pub fn create_for_test(histogram: Vec<(u32, u32)>, mean: f64, len: u32) -> Self {
-        // Provide a default instance for testing
-        Self {
-            histogram,
-            mean,
-            len,
-        }
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;
@@ -1291,45 +1213,6 @@ mod tests {
             .unwrap()
             .mean;
         assert_eq!(result, 0.0);
-    }
-
-    #[test]
-    fn test_mean_depth_increased_max_depth() {
-        let mut bam = bam::IndexedReader::from_path("testdata/bedcov_max_depth.bam").unwrap();
-        let region = Region {
-            contig: "chrQ_mirror".to_owned(),
-            beg: 500,
-            end: 800,
-            name: "test_region".to_owned(),
-        };
-        let result = mean_depth(&mut bam, &region, 0, 0, 100_000_000).unwrap();
-        assert_eq!(result.max().unwrap(), 11444);
-    }
-
-    #[test]
-    fn test_mean_depth_decreased_max_depth() {
-        let mut bam = bam::IndexedReader::from_path("testdata/bedcov_max_depth.bam").unwrap();
-        let region = Region {
-            contig: "chrQ_mirror".to_owned(),
-            beg: 500,
-            end: 800,
-            name: "test_region".to_owned(),
-        };
-        let result = mean_depth(&mut bam, &region, 0, 0, 1_000).unwrap();
-        assert_eq!(result.max().unwrap(), 1121);
-    }
-
-    #[test]
-    fn test_mean_depth_max_depth_0() {
-        let mut bam = bam::IndexedReader::from_path("testdata/bedcov_max_depth.bam").unwrap();
-        let region = Region {
-            contig: "chrQ_mirror".to_owned(),
-            beg: 500,
-            end: 800,
-            name: "test_region".to_owned(),
-        };
-        let result = mean_depth(&mut bam, &region, 0, 0, 0).unwrap();
-        assert_eq!(result.max().unwrap(), 11444);
     }
 
     #[test]

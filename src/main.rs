@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
 
-mod bedcov;
 mod calibrate;
 
 #[derive(Parser, Debug)]
@@ -83,24 +83,19 @@ pub struct BedcovArgs {
 
     /// Number of bases to omit from the start and end of each region.
     #[arg(short = 'f', long = "flank", default_value_t = 0)]
-    flank: i32,
-
-    /// max per-file depth; avoids excessive memory usage. Passing zero sets it
-    /// to the highest possible value, effectively removing the depth limit.
-    #[arg(short = 'd', long = "max-depth", default_value_t = 8_000)]
-    max_depth: u32,
+    flank: u64,
 
     /// Reference sequence FASTA file. Used when input is CRAM format.
     #[arg(short = 'T', long = "reference")]
-    reference: Option<String>,
+    reference: Option<PathBuf>,
 
     /// List of coverage thresholds to include in the report. The report will include the
     /// percentage of bases in each region with coverage greater than or equal to each threshold.
     #[arg(short, long, value_delimiter = ',')]
     thresholds: Option<Vec<u32>>,
 
-    bed_path: String,
-    bam_path: String,
+    bed_path: PathBuf,
+    bam_path: PathBuf,
 }
 
 #[derive(Debug, Subcommand)]
@@ -112,11 +107,24 @@ enum Commands {
     Bedcov(BedcovArgs),
 }
 
+impl From<BedcovArgs> for sequintools::coverage::BedcovArgs {
+    fn from(args: BedcovArgs) -> Self {
+        sequintools::coverage::BedcovArgs {
+            min_mapq: args.min_mapq,
+            flank: args.flank,
+            reference: args.reference,
+            thresholds: args.thresholds,
+            bed_path: args.bed_path,
+            bam_path: args.bam_path,
+        }
+    }
+}
+
 fn main() -> Result<()> {
     let args = App::parse();
     match args.command {
         Commands::Calibrate(args) => calibrate::calibrate(args)?,
-        Commands::Bedcov(args) => bedcov::bedcov(args)?,
+        Commands::Bedcov(args) => sequintools::coverage::run(&args.into())?,
     };
     Ok(())
 }
@@ -229,8 +237,8 @@ mod tests {
             Commands::Bedcov(bedcov_args) => {
                 assert_eq!(bedcov_args.min_mapq, 15);
                 assert_eq!(bedcov_args.flank, 250);
-                assert_eq!(bedcov_args.bed_path, "regions.bed");
-                assert_eq!(bedcov_args.bam_path, "data.bam");
+                assert_eq!(bedcov_args.bed_path, PathBuf::from("regions.bed"));
+                assert_eq!(bedcov_args.bam_path, PathBuf::from("data.bam"));
             }
             _ => panic!("Expected Bedcov command"),
         }
@@ -253,10 +261,31 @@ mod tests {
             Commands::Bedcov(bedcov_args) => {
                 assert_eq!(bedcov_args.min_mapq, 15);
                 assert_eq!(bedcov_args.flank, 250);
-                assert_eq!(bedcov_args.bed_path, "regions.bed");
-                assert_eq!(bedcov_args.bam_path, "data.bam");
+                assert_eq!(bedcov_args.bed_path, PathBuf::from("regions.bed"));
+                assert_eq!(bedcov_args.bam_path, PathBuf::from("data.bam"));
             }
             _ => panic!("Expected Bedcov command"),
         }
+    }
+
+    #[test]
+    fn test_bedcovarg_from() {
+        let input = BedcovArgs {
+            min_mapq: 0,
+            flank: 500,
+            reference: None,
+            thresholds: None,
+            bed_path: PathBuf::from("my.bed"),
+            bam_path: PathBuf::from("my.bam"),
+        };
+        let expected = sequintools::coverage::BedcovArgs {
+            min_mapq: 0,
+            flank: 500,
+            reference: None,
+            thresholds: None,
+            bed_path: PathBuf::from("my.bed"),
+            bam_path: PathBuf::from("my.bam"),
+        };
+        assert_eq!(sequintools::coverage::BedcovArgs::from(input), expected);
     }
 }
