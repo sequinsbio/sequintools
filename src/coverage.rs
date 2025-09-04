@@ -229,15 +229,8 @@ fn write_csv<W: Write>(
         );
         if let Some(thresholds) = &thresholds {
             for thresh in thresholds {
-                let pct = coverage.percent_above_threshold(*thresh);
-                match pct {
-                    Some(value) => row.push_str(&format!(",{:.2}", value)),
-                    None => {
-                        return Err(Error::Bedcov {
-                            msg: format!("unable to calculate pct_gt_{}", thresh),
-                        })
-                    }
-                }
+                let pct = coverage.percent_above_threshold(*thresh).unwrap_or(0.0);
+                row.push_str(&format!(",{:.2}", pct));
             }
         }
         writeln!(dest, "{row}")?;
