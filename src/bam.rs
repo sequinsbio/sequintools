@@ -131,7 +131,7 @@ impl BamReader for HtslibBamReader {
     }
 }
 
-/// Mock implementation of a BAM reader for testing purposes.
+/// Mock implementation of `BamReader` for testing purposes.
 ///
 /// This struct simulates the behavior of a BAM/CRAM reader and is intended for
 /// use in unit tests where reading from actual files is not desired. It allows
@@ -139,8 +139,7 @@ impl BamReader for HtslibBamReader {
 /// interface as a real BAM reader.
 ///
 /// # Example
-///
-/// ```
+/// ```ignore
 /// use crate::bam::{MockBamReader, BamReader};
 /// use rust_htslib::bam::Record;
 ///
@@ -157,13 +156,35 @@ impl BamReader for HtslibBamReader {
 #[cfg(test)]
 pub struct MockBamReader {
     records: Vec<Record>,
+    header: HeaderView,
 }
 
 #[cfg(test)]
 impl MockBamReader {
     /// Create a new MockBamReader from a vector of records
-    fn new(records: Vec<Record>) -> Self {
-        Self { records }
+    pub fn new(
+        records: Vec<Record>,
+        header_records: Option<&[rust_htslib::bam::header::HeaderRecord]>,
+    ) -> Self {
+        let mut header = rust_htslib::bam::Header::new();
+
+        match header_records {
+            Some(recs) => {
+                for rec in recs {
+                    header.push_record(rec);
+                }
+            }
+            None => {
+                header.push_record(&rust_htslib::bam::header::HeaderRecord::new(
+                    b"SQ\tSN:chrQ_mirror\tLN:83800\n",
+                ));
+            }
+        }
+        let header_view = HeaderView::from_header(&header);
+        Self {
+            records,
+            header: header_view,
+        }
     }
 }
 
@@ -187,7 +208,7 @@ impl BamReader for MockBamReader {
 
     /// Returns a reference to the BAM header (not implemented for mock)
     fn header(&self) -> &HeaderView {
-        panic!("Mock header not implemented - use real BAM reader for header operations")
+        &self.header
     }
 
     /// Mock fetch does nothing and always returns Ok
@@ -234,7 +255,7 @@ mod tests {
     #[test]
     fn test_mock_bam_reader_basic() {
         let records = vec![];
-        let mut mock_reader = MockBamReader::new(records);
+        let mut mock_reader = MockBamReader::new(records, None);
 
         // Test that records iterator works (should be empty)
         let collected: Vec<_> = mock_reader.records().collect();
@@ -249,7 +270,7 @@ mod tests {
         record.set_pos(100);
 
         let records = vec![record];
-        let mut mock_reader = MockBamReader::new(records);
+        let mut mock_reader = MockBamReader::new(records, None);
 
         // Test that we get back our record
         let collected: Vec<_> = mock_reader.records().collect();
@@ -266,24 +287,15 @@ mod tests {
         }
 
         let records = vec![Record::new(), Record::new(), Record::new()];
-        let mock_reader = MockBamReader::new(records);
+        let mock_reader = MockBamReader::new(records, None);
 
         let count = process_bam_records(mock_reader);
         assert_eq!(count, 3);
     }
 
     #[test]
-    #[should_panic(expected = "Mock header not implemented")]
-    fn test_mock_bam_reader_header_panic() {
-        let mock_reader = MockBamReader::new(vec![]);
-
-        // This should panic since no header was provided
-        let _header = mock_reader.header();
-    }
-
-    #[test]
     fn test_mock_bam_reader_methods_dont_error() {
-        let mut mock_reader = MockBamReader::new(vec![]);
+        let mut mock_reader = MockBamReader::new(vec![], None);
 
         // All these methods should succeed on mock
         assert!(mock_reader.set_threads(4).is_ok());
