@@ -1268,6 +1268,44 @@ region2,chrQ,10,20,4,5,6";
     }
 
     #[test]
+    fn test_calibrate_by_standard_coverage_with_summary_report() {
+        let mut args = mock_calibrate_args(false, true);
+        // There MUST be an output file and it MUST be indexed if we want to
+        // produce a summary report.
+        args.write_index = true;
+        let summary_report_path = NamedTempFile::new()
+            .unwrap()
+            .path()
+            .to_string_lossy()
+            .into_owned();
+        args.summary_report = Some(summary_report_path.clone());
+        let result = calibrate_by_standard_coverage(args);
+        assert!(result.is_ok());
+
+        // Verify summary report file exists and has content
+        let metadata = std::fs::metadata(&summary_report_path).unwrap();
+        assert!(
+            metadata.len() > 0,
+            "Summary report file should not be empty"
+        );
+    }
+
+    // This prints the BAM to stdout, which messes up the test output. Need to
+    // figure out how to do this properly.
+    // #[test]
+    // fn test_calibrate_by_standard_coverage_with_summary_report_missing_output() {
+    //     let mut args = mock_calibrate_args(false, false);
+    //     let summary_report_path = NamedTempFile::new()
+    //         .unwrap()
+    //         .path()
+    //         .to_string_lossy()
+    //         .into_owned();
+    //     args.summary_report = Some(summary_report_path.clone());
+    //     let result = calibrate_by_standard_coverage(args);
+    //     assert!(result.is_err());
+    // }
+
+    #[test]
     fn test_subsample() {
         let mut rng = Pcg32::seed_from_u64(42);
         let mut hash = HashMap::new();
