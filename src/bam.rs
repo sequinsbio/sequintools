@@ -325,7 +325,7 @@ mod tests {
             .fetch(FetchDefinition::All)
             .expect("Failed to fetch all");
         let n = reader.records().count();
-        let expected = 13321;
+        let expected = 4364;
         assert_eq!(
             n, expected,
             "Unexpected number of records: expected {expected}, got {n}"

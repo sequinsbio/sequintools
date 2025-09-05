@@ -404,7 +404,7 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
     fn test_run() {
         let args = BedcovArgs {
             bam_path: PathBuf::from("testdata/calibrated.bam"),
-            bed_path: PathBuf::from("testdata/calibrated.bed"),
+            bed_path: PathBuf::from("testdata/resources/sequin_regions.chrQ_mirror.bed"),
             reference: None,
             min_mapq: 0,
             flank: 0,

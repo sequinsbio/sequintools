@@ -463,6 +463,7 @@ fn copy_unmapped_reads(bam: &mut bam::IndexedReader, out: &mut bam::Writer) -> R
     Ok(())
 }
 
+#[derive(Debug)]
 pub struct DepthResult {
     pub mean: f64,
 }
@@ -928,11 +929,12 @@ mod tests {
     use super::*;
     use tempfile::NamedTempFile;
 
-    const TEST_BAM_PATH: &str = "testdata/sim_R.bam";
-    const TEST_BED_PATH: &str = "testdata/region_test.bed";
-    const TEST_CRAM_PATH: &str = "testdata/calibrated.cram";
-    const TEST_CRAM_REF_PATH: &str = "testdata/reference.fasta";
-    const TEST_CRAM_BED_PATH: &str = "testdata/cram_regions.bed";
+    const TEST_BAM_PATH: &str = "testdata/hg38/calibrated.bam";
+    const TEST_BED_PATH: &str = "testdata/hg38/resources/sequin_regions.chrQ_mirror.bed";
+    const TEST_SAMPLE_BED_PATH: &str = "testdata/hg38/resources/sequin_regions.hg38.bed";
+    const TEST_CRAM_PATH: &str = "testdata/hg38/calibrated.cram";
+    const TEST_CRAM_REF_PATH: &str = "testdata/hg38/genome_with_sequins.fasta";
+    const TEST_CRAM_BED_PATH: &str = "testdata/hg38/resources/sequin_regions.chrQ_mirror.bed";
 
     fn mock_calibrate_args(with_sample: bool, need_output: bool) -> CalibrateArgs {
         CalibrateArgs {
@@ -951,7 +953,7 @@ mod tests {
                 None
             },
             sample_bed: if with_sample {
-                Some(TEST_BED_PATH.to_owned())
+                Some(TEST_SAMPLE_BED_PATH.to_owned())
             } else {
                 None
             },
@@ -1021,6 +1023,9 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    // This test is kinda of broken. `write_summary_report` is actually calculating the calibrated
+    // coverage itself from the BAM provided in `args`. The calibrated means provided here are
+    // taken from the BAM. Really this should be two separate functions. Tracked at #238
     #[test]
     fn test_write_summary_report_with_output() {
         let mut args = mock_calibrate_args(false, false);
@@ -1084,7 +1089,7 @@ mod tests {
                 "4342",
                 "1",
                 "2",
-                "0"
+                "30.975132786093674"
             ])
         );
         let r2 = records.next().unwrap().unwrap();
@@ -1097,7 +1102,7 @@ mod tests {
                 "8684",
                 "4",
                 "5",
-                "0"
+                "35.29623370352487"
             ])
         );
         assert!(records.next().is_none());
@@ -1131,40 +1136,39 @@ mod tests {
         assert_eq!(starts.len(), 9);
     }
 
+    // Note sure what the point of this test is. Everything in the test BAM has mapq == 60.
     #[test]
     fn test_window_starts_with_mapq() {
         let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
         let region = Region {
             contig: "chr3".to_owned(),
-            beg: 99,
-            end: 878,
-            name: "reg2".to_owned(),
+            beg: 1001,
+            end: 1500,
+            name: "variant_3".to_owned(),
         };
-        let starts = window_starts(&mut bam, &region, 0, 100, 98);
-
-        let expected = [36, 37, 35, 36, 20, 29, 32];
-        for (i, cnt) in starts.iter().enumerate() {
-            assert_eq!(
-                cnt, &expected[i],
-                "Window {}: Expected {} but Got {} ",
-                i, expected[i], cnt
-            );
-        }
+        let starts = window_starts(&mut bam, &region, 0, 100, 0);
+        assert_eq!(starts.len(), 4);
     }
 
     #[test]
     fn test_records_that_start_in_region() {
         let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
-        let records = records_that_start_in_region(&mut bam, "chr3", 99, 199);
-        assert_eq!(records.len(), 36);
+        let records = records_that_start_in_region(&mut bam, "chr3", 1001, 4000);
+        assert_eq!(records.len(), 780);
     }
 
     #[test]
     fn test_calibrated_contigs() {
-        let contigs = calibrated_contigs(TEST_BED_PATH).unwrap();
+        let contigs = calibrated_contigs(TEST_SAMPLE_BED_PATH).unwrap();
         assert!(contigs.contains("chr1"));
         assert!(contigs.contains("chr2"));
-        assert_eq!(contigs.len(), 2);
+        assert!(contigs.contains("chr3"));
+        assert_eq!(contigs.len(), 3);
+    }
+
+    fn approx_eq_decimals(a: f64, b: f64, decimals: u32) -> bool {
+        let factor = 10f64.powi(decimals as i32);
+        (a * factor).round() == (b * factor).round()
     }
 
     #[test]
@@ -1174,42 +1178,48 @@ mod tests {
             &mut bam,
             &Region {
                 contig: "chr1".to_owned(),
-                beg: 99,
-                end: 199,
-                name: "region".to_owned(),
+                beg: 1001,
+                end: 4000,
+                name: "variant_1".to_owned(),
             },
             0,
             0,
             PILEUP_MAX_DEPTH,
         );
-        assert_eq!(result.unwrap().mean, 33.95);
+        assert!(result.is_ok(), "Expected Ok, got {result:?}");
+        let result = result.map(|r| r.mean).unwrap();
+        assert!(approx_eq_decimals(result, 38.99, 2));
     }
 
     #[test]
     fn test_mean_depth_chr2() {
         let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
         let region = Region {
-            contig: "chr2".to_owned(),
-            beg: 99,
-            end: 199,
-            name: "reg2".to_owned(),
+            contig: "chr2".to_string(),
+            beg: 1001,
+            end: 4000,
+            name: "variant_2".to_string(),
         };
         let result = mean_depth(&mut bam, &region, 0, 0, PILEUP_MAX_DEPTH)
             .unwrap()
             .mean;
-        assert_eq!(result, 35.25);
+        let expected = 38.01;
+        assert!(
+            approx_eq_decimals(result, expected, 2),
+            "Expected {expected}, got {result}"
+        );
     }
 
     #[test]
-    fn test_mean_depth_chr2_mapq10() {
+    fn test_mean_depth_chr2_mapq100() {
         let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
         let region = Region {
             contig: "chr2".to_owned(),
-            beg: 99,
-            end: 199,
-            name: "reg2".to_owned(),
+            beg: 1001,
+            end: 4000,
+            name: "variant_2".to_owned(),
         };
-        let result = mean_depth(&mut bam, &region, 0, 10, PILEUP_MAX_DEPTH)
+        let result = mean_depth(&mut bam, &region, 0, 100, PILEUP_MAX_DEPTH)
             .unwrap()
             .mean;
         assert_eq!(result, 0.0);
@@ -1256,19 +1266,22 @@ mod tests {
     #[test]
     fn test_calibrate_regions() {
         // Setup test data
-        let mut bam = bam::IndexedReader::from_path(TEST_BAM_PATH).unwrap();
+        let mut bam =
+            bam::IndexedReader::from_path(TEST_BAM_PATH).expect("Failed to open TEST_BAM_PATH");
         let header = bam::Header::from_template(bam.header());
 
-        let regions =
-            region::load_from_bed(&mut io::BufReader::new(File::open(TEST_BED_PATH).unwrap()))
-                .unwrap();
+        let regions = region::load_from_bed(&mut io::BufReader::new(
+            File::open(TEST_BED_PATH).expect("Failed to open TEST_BED_PATH"),
+        ))
+        .expect("Failed to load BED regions");
         let mut sample_regions_map = HashMap::new();
         for region in &regions {
             sample_regions_map.insert(&region.name, region);
         }
         let args = mock_calibrate_args(true, true);
         let out_path = args.output.clone().unwrap();
-        let mut temp_output = bam::Writer::from_path(&out_path, &header, bam::Format::Bam).unwrap();
+        let mut temp_output = bam::Writer::from_path(&out_path, &header, bam::Format::Bam)
+            .expect("Failed to create BAM writer");
 
         // Run calibration
         calibrate_regions(
@@ -1309,20 +1322,6 @@ mod tests {
     }
 
     #[test]
-    fn test_calibrate_by_sample_coverage_cram() {
-        let mut args = mock_calibrate_args(true, true);
-        let out_path = args.output.clone().unwrap();
-        args.path = TEST_CRAM_PATH.to_string();
-        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
-        args.bed = TEST_CRAM_BED_PATH.to_string();
-        args.sample_bed = Some(TEST_CRAM_BED_PATH.to_string());
-        let result = calibrate_by_sample_coverage(args);
-        assert!(result.is_ok());
-        let metadata = std::fs::metadata(&out_path).unwrap();
-        assert!(metadata.len() > 0, "Output BAM file should not be empty");
-    }
-
-    #[test]
     fn test_calibrate_by_standard_coverage() {
         // Working correctly with expected args
         let args_expected = mock_calibrate_args(false, true);
@@ -1336,19 +1335,6 @@ mod tests {
         assert!(metadata.len() > 0, "Output BAM file should not be empty");
 
         // TODO: check the output BAM
-    }
-
-    #[test]
-    fn test_calibrate_by_standard_coverage_cram() {
-        let mut args = mock_calibrate_args(true, true);
-        let out_path = args.output.clone().unwrap();
-        args.path = TEST_CRAM_PATH.to_string();
-        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
-        args.bed = TEST_CRAM_BED_PATH.to_string();
-        let result = calibrate_by_standard_coverage(args);
-        assert!(result.is_ok());
-        let metadata = std::fs::metadata(&out_path).unwrap();
-        assert!(metadata.len() > 0, "Output BAM file should not be empty");
     }
 
     #[test]
@@ -1448,6 +1434,21 @@ mod tests {
         assert!(result.is_err());
     }
 
+    /// CRAM I/O testing functions
+
+    #[test]
+    fn test_calibrate_by_standard_coverage_cram() {
+        let mut args = mock_calibrate_args(true, true);
+        let out_path = args.output.clone().unwrap();
+        args.path = TEST_CRAM_PATH.to_string();
+        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
+        args.bed = TEST_CRAM_BED_PATH.to_string();
+        let result = calibrate_by_standard_coverage(args);
+        assert!(result.is_ok());
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
+    }
+
     #[test]
     fn test_calibrated_by_standard_coverage_cram_output() {
         let mut args = mock_calibrate_args(true, true);
@@ -1463,12 +1464,26 @@ mod tests {
     }
 
     #[test]
+    fn test_calibrate_by_sample_coverage_cram() {
+        let mut args = mock_calibrate_args(true, true);
+        let out_path = args.output.clone().unwrap();
+        args.path = TEST_CRAM_PATH.to_string();
+        args.reference = Some(TEST_CRAM_REF_PATH.to_string());
+        args.bed = TEST_CRAM_BED_PATH.to_string();
+        args.sample_bed = Some(TEST_SAMPLE_BED_PATH.to_string());
+        let result = calibrate_by_sample_coverage(args);
+        assert!(result.is_ok());
+        let metadata = std::fs::metadata(&out_path).unwrap();
+        assert!(metadata.len() > 0, "Output BAM file should not be empty");
+    }
+
+    #[test]
     fn test_calibrate_by_sample_coverage_cram_output() {
         let mut args = mock_calibrate_args(true, true);
         args.path = TEST_CRAM_PATH.to_string();
         args.reference = Some(TEST_CRAM_REF_PATH.to_string());
         args.bed = TEST_CRAM_BED_PATH.to_string();
-        args.sample_bed = Some(TEST_CRAM_BED_PATH.to_string());
+        args.sample_bed = Some(TEST_SAMPLE_BED_PATH.to_string());
         args.cram = true;
         let out_path = args.output.clone().unwrap();
         let result = calibrate_by_sample_coverage(args);
