@@ -266,22 +266,22 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
     }
 
     if let Some(summary_report) = &args.summary_report {
-        if args.output.is_none() {
+        if let Some(bam_path) = &args.output {
+            set_calibrated_coverage(
+                &mut calibration_results,
+                bam_path,
+                args.min_mapq,
+                args.flank,
+            )?;
+            let mut file = File::create(summary_report)?;
+            // write_summary_report creates a `csv::Writer` which buffers the file,
+            // do NOT wrap an `io::BufWriter` here.
+            write_summary_report(&calibration_results, &mut file)?;
+        } else {
             bail!(
                 "Cannot write summary report when output is stdout. Please provide an output path."
             );
         }
-        let bam_path = args.output.unwrap();
-        set_calibrated_coverage(
-            &mut calibration_results,
-            &bam_path,
-            args.min_mapq,
-            args.flank,
-        )?;
-        let mut file = File::create(summary_report)?;
-        // write_summary_report creates a `csv::Writer` which buffers the file,
-        // do NOT wrap an `io::BufWriter` here.
-        write_summary_report(&calibration_results, &mut file)?;
     }
 
     Ok(())
@@ -290,7 +290,7 @@ pub fn calibrate_by_standard_coverage(args: CalibrateArgs) -> Result<()> {
 /// Sets the calibrated coverage for each region in the calibration results.
 fn set_calibrated_coverage(
     calibration_results: &mut [CalibrationResult],
-    bam_path: &String,
+    bam_path: &str,
     min_mapq: u8,
     flank: i32,
 ) -> Result<()> {
@@ -994,8 +994,7 @@ mod tests {
                 calibrated_coverage: 0.0,
             },
         ];
-        let result =
-            set_calibrated_coverage(&mut calibration_results, &TEST_BAM_PATH.to_string(), 0, 0);
+        let result = set_calibrated_coverage(&mut calibration_results, TEST_BAM_PATH, 0, 0);
         assert!(result.is_ok(), "Expected Ok(()), got {:?}", result);
         let expected = 34.57;
         assert!(
