@@ -929,12 +929,12 @@ mod tests {
     use super::*;
     use tempfile::NamedTempFile;
 
-    const TEST_BAM_PATH: &str = "testdata/hg38/calibrated.bam";
-    const TEST_BED_PATH: &str = "testdata/hg38/resources/sequin_regions.chrQ_mirror.bed";
-    const TEST_SAMPLE_BED_PATH: &str = "testdata/hg38/resources/sequin_regions.hg38.bed";
-    const TEST_CRAM_PATH: &str = "testdata/hg38/calibrated.cram";
-    const TEST_CRAM_REF_PATH: &str = "testdata/hg38/genome_with_sequins.fasta";
-    const TEST_CRAM_BED_PATH: &str = "testdata/hg38/resources/sequin_regions.chrQ_mirror.bed";
+    const TEST_BAM_PATH: &str = "testdata/calibrated.bam";
+    const TEST_BED_PATH: &str = "testdata/resources/sequin_regions.chrQ_mirror.bed";
+    const TEST_SAMPLE_BED_PATH: &str = "testdata/resources/sequin_regions.hg38.bed";
+    const TEST_CRAM_PATH: &str = "testdata/calibrated.cram";
+    const TEST_CRAM_REF_PATH: &str = "testdata/genome_with_sequins.fasta";
+    const TEST_CRAM_BED_PATH: &str = "testdata/resources/sequin_regions.chrQ_mirror.bed";
 
     fn mock_calibrate_args(with_sample: bool, need_output: bool) -> CalibrateArgs {
         CalibrateArgs {
