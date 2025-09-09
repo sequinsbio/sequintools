@@ -182,7 +182,7 @@ where
                             region.name, probabilities
                         ),
                     })?;
-            if subsample(&record, &mut keep_names, probability, &mut rng) {
+            if subsample(&record, &mut keep_names, probability, &mut rng)? {
                 writer.write(&record)?;
             }
         }
@@ -290,25 +290,27 @@ fn subsample(
     hash: &mut HashMap<String, bool>,
     threshold: f64,
     rng: &mut Pcg32,
-) -> bool {
+) -> Result<bool> {
     if record.is_duplicate() {
-        return false;
+        return Ok(false);
     }
-    let qname = String::from_utf8(record.qname().to_vec()).unwrap();
+    let qname = String::from_utf8(record.qname().to_vec()).map_err(|e| Error::Calibration {
+        msg: format!("subsample: invalid read name: {:?}", e),
+    })?;
     match hash.get(&qname) {
-        Some(_) => return true,
+        Some(_) => return Ok(true),
         None => {
             if record.pos() > record.mpos() {
-                return false;
+                return Ok(false);
             }
         }
     };
     let rand = rng.random::<f64>();
     if rand <= threshold {
         hash.insert(qname, true);
-        return true;
+        return Ok(true);
     }
-    false
+    Ok(false)
 }
 
 /// Parameters for sample profile calibration.
@@ -452,6 +454,10 @@ where
                     ),
                 })?;
 
+        // The first window of the target region is calibrated against the last
+        // window of the sample region. This is intentional. The Sequin (taget)
+        // regions are the mirror of the sample region; therefore, we want to
+        // mimic the coverage profile in reverse.
         let sample_starts = window_starts(reader, sample_region, window_size, min_mapq)?;
         let rev_sample_starts = sample_starts.into_iter().rev().collect::<Vec<_>>();
 
@@ -470,24 +476,24 @@ where
         {
             let window_end = window_beg + window_size - 1;
 
+            // Divide by 2 because each read is part of a pair. When we include
+            // one we automatically include the other; therefore, we will have
+            // twice the coverage we intended.
             let n_starts = rev_sample_starts[i] / 2;
 
             // These are the records that *start* in the current window.
             let region_records = records
                 .iter()
                 .filter(|record| {
-                    let pos: u64 = record.pos().try_into().unwrap();
-                    pos >= window_beg && pos <= window_end
+                    if let Ok(pos) = u64::try_from(record.pos()) {
+                        pos >= window_beg && pos <= window_end
+                    } else {
+                        false
+                    }
                 })
                 .collect::<Vec<_>>();
 
-            let indexes = choose_from(region_records.len() as u64, n_starts as u64, seed);
-            let numbers = match indexes {
-                Ok(numbers) => numbers,
-                Err(_) => (0..region_records.len())
-                    .map(|x| x.try_into().unwrap())
-                    .collect(),
-            };
+            let numbers = choose_from(region_records.len() as u64, n_starts as u64, seed);
             for idx in &numbers {
                 let record = region_records[*idx as usize];
                 let qname =
@@ -582,8 +588,8 @@ fn records_that_start_in_region<R: BamReader>(
     reader.fetch((contig, beg, end))?;
     for result in reader.records() {
         let record = result?;
-        let pos = record.pos() as u64;
-        if pos < beg || pos > end {
+        let pos = record.pos();
+        if pos < beg as i64 || pos > end as i64 {
             continue;
         }
         records.push(record);
@@ -593,6 +599,8 @@ fn records_that_start_in_region<R: BamReader>(
 
 /// Randomly selects a subset of indices from a range.
 ///
+/// If `n` is greater than `size`, all indices are returned.
+///
 /// # Arguments
 /// - `size`: The total number of items.
 /// - `n`: The number to select.
@@ -600,16 +608,9 @@ fn records_that_start_in_region<R: BamReader>(
 ///
 /// # Returns
 /// A `Result` containing the selected indices.
-fn choose_from(size: u64, n: u64, seed: u64) -> Result<Vec<u64>> {
+fn choose_from(size: u64, n: u64, seed: u64) -> Vec<u64> {
     let mut rng = Pcg32::seed_from_u64(seed);
-    let xs = (0..size).choose_multiple(&mut rng, n as usize);
-    if xs.len() as u64 == n {
-        Ok(xs)
-    } else {
-        Err(Error::Calibration {
-            msg: format!("Sample size is too big, wanted {} from {}", n, size),
-        })
-    }
+    (0..size).choose_multiple(&mut rng, n as usize)
 }
 
 /// Copies reads from uncalibrated contigs to the output.
@@ -956,13 +957,15 @@ mod tests {
 
         // Test with probability 1.0 (should always keep)
         let result = subsample(&record, &mut hash, 1.0, &mut rng);
-        assert!(result);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
 
         // Test with probability 0.0 using a different record
         let mut record2 = create_mock_record(0, 200, "read2");
         record2.set_mpos(250);
         let result = subsample(&record2, &mut hash, 0.0, &mut rng);
-        assert!(!result);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -974,7 +977,8 @@ mod tests {
 
         // Duplicate reads should always be filtered out
         let result = subsample(&record, &mut hash, 1.0, &mut rng);
-        assert!(!result);
+        assert!(result.is_ok(), "Expected Ok, got {:?}", result.err());
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -1088,26 +1092,20 @@ mod tests {
     #[test]
     fn test_choose_from() {
         let result = choose_from(10, 3, 42);
-        assert!(result.is_ok());
-
-        let indices = result.unwrap();
-        assert_eq!(indices.len(), 3);
-        assert!(indices.iter().all(|&x| x < 10));
+        assert_eq!(result.len(), 3);
+        assert!(result.iter().all(|&x| x < 10));
     }
 
     #[test]
     fn test_choose_from_sample_too_large() {
         let result = choose_from(5, 10, 42);
-        assert!(result.is_err());
+        assert_eq!(result.len(), 5);
     }
 
     #[test]
     fn test_choose_from_zero_sample() {
         let result = choose_from(10, 0, 42);
-        assert!(result.is_ok());
-
-        let indices = result.unwrap();
-        assert!(indices.is_empty());
+        assert!(result.is_empty());
     }
 
     #[test]
