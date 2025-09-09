@@ -430,6 +430,20 @@ impl BamWriter for MockBamWriter {
 }
 
 #[cfg(test)]
+pub(crate) fn create_mock_record(tid: i32, pos: i64, qname: &str) -> Record {
+    let mut record = Record::new();
+    record.set_tid(tid);
+    record.set_pos(pos);
+    record.set_qname(qname.as_bytes());
+    record.set_mapq(60);
+    record.unset_unmapped();
+    let cigar_string =
+        rust_htslib::bam::record::CigarString(vec![rust_htslib::bam::record::Cigar::Match(100)]);
+    record.set_cigar(Some(&cigar_string));
+    record
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
