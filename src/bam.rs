@@ -777,7 +777,7 @@ mod tests {
     }
 
     #[test]
-    fn test_htmlib_bam_writer_creation() {
+    fn test_htslib_bam_writer_creation() {
         let header = bam::Header::new();
         let format = bam::Format::Bam;
         let result = HtslibBamWriter::from_path("output.bam", &header, format);
