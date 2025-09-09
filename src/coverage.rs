@@ -8,14 +8,14 @@ use std::io::Write;
 use std::path::PathBuf;
 
 #[derive(Debug)]
-struct RegionCoverage {
-    region: Region,
-    coverage: Vec<u32>,
+pub(crate) struct RegionCoverage {
+    pub(crate) region: Region,
+    pub(crate) coverage: Vec<u32>,
 }
 
 impl RegionCoverage {
     /// Create a new RegionCoverage instance.
-    fn new(contig: &str, start: u64, end: u64, name: &str, coverage: Vec<u32>) -> Self {
+    pub(crate) fn new(contig: &str, start: u64, end: u64, name: &str, coverage: Vec<u32>) -> Self {
         Self {
             region: Region::new(contig, start, end, name),
             coverage,
@@ -23,17 +23,17 @@ impl RegionCoverage {
     }
 
     /// Get the minimum coverage value.
-    fn min(&self) -> Option<&u32> {
+    pub(crate) fn min(&self) -> Option<&u32> {
         self.coverage.iter().min()
     }
 
     /// Get the maximum coverage value.
-    fn max(&self) -> Option<&u32> {
+    pub(crate) fn max(&self) -> Option<&u32> {
         self.coverage.iter().max()
     }
 
     /// Calculate the mean of the coverage.
-    fn mean(&self) -> Option<f32> {
+    pub(crate) fn mean(&self) -> Option<f32> {
         let total = self.coverage.iter().sum::<u32>() as f32;
         let n = self.coverage.len() as f32;
         if n == 0.0 {
@@ -43,7 +43,7 @@ impl RegionCoverage {
     }
 
     /// Calculate the standard deviation of the coverage.
-    fn std(&self) -> Option<f32> {
+    pub(crate) fn std(&self) -> Option<f32> {
         match (self.mean(), self.coverage.len()) {
             (Some(mu), n) if n > 0 => {
                 let variance = self
@@ -62,7 +62,7 @@ impl RegionCoverage {
     }
 
     /// Calculate the coefficient of variation (CV) of the coverage.
-    fn cv(&self) -> Option<f32> {
+    pub(crate) fn cv(&self) -> Option<f32> {
         match (self.std(), self.mean()) {
             (Some(sd), Some(mu)) if mu > 0.0 => Some(sd / mu),
             _ => None,
@@ -70,7 +70,7 @@ impl RegionCoverage {
     }
 
     /// Calculate the percentage of bases above a certain coverage threshold.
-    fn percent_above_threshold(&self, threshold: u32) -> Option<f64> {
+    pub(crate) fn percent_above_threshold(&self, threshold: u32) -> Option<f64> {
         let n = self.coverage.len();
         if n == 0 {
             return None;
@@ -80,20 +80,13 @@ impl RegionCoverage {
     }
 }
 
-fn coverage_for_region<T: BamReader>(
+// TODO: this shouldn't be accepting a `flank` argument. The regions should be trimmed prior to calling this function.
+pub(crate) fn coverage_for_region<T: BamReader>(
     bam_reader: &mut T,
     region: &Region,
     min_mapq: u8,
     flank: u64,
-    reference: Option<&PathBuf>,
 ) -> Result<RegionCoverage> {
-    let ncpus = std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(1);
-    bam_reader.set_threads(ncpus)?;
-    if let Some(reference) = reference {
-        bam_reader.set_reference(reference)?;
-    }
     let beg = region.beg.checked_add(flank).ok_or_else(|| Error::Bedcov {
         msg: format!(
             "Region start + flank overflowed for region: {}:{}-{}",
@@ -177,8 +170,14 @@ fn calculate_coverage(
             // rust_htslib::bam::IndexedReader is not Send + Sync (thread
             // safe). Each thread needs its own copy (I think).
             let mut bam_reader = HtslibBamReader::from_path(bam_path)?;
-            let coverage =
-                coverage_for_region(&mut bam_reader, region, min_mapq, flank, reference)?;
+            let ncpus = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1);
+            bam_reader.set_threads(ncpus)?;
+            if let Some(reference) = reference {
+                bam_reader.set_reference(reference)?;
+            }
+            let coverage = coverage_for_region(&mut bam_reader, region, min_mapq, flank)?;
             Ok(coverage)
         })
         .collect::<Result<Vec<_>>>()?;
@@ -329,7 +328,7 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
         let records = vec![];
         let mut mock = MockBamReader::new(records, None);
         let region = Region::new("chrQ_mirror", 100, 200, "test_region");
-        let result = coverage_for_region(&mut mock, &region, 0, 0, None);
+        let result = coverage_for_region(&mut mock, &region, 0, 0);
         assert!(result.is_ok());
         let coverage = result.unwrap();
         let max = coverage.max().expect("should have max");
@@ -347,7 +346,7 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
         record.unset_unmapped();
         let mut mock = MockBamReader::new(vec![record], None);
         let region = Region::new("chrQ_mirror", 100, 200, "test_region");
-        let result = coverage_for_region(&mut mock, &region, 0, 0, None);
+        let result = coverage_for_region(&mut mock, &region, 0, 0);
         assert!(result.is_ok());
         let coverage = result.unwrap();
         let max = coverage.max().expect("should have max");
@@ -366,7 +365,7 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
         record.unset_unmapped();
         let mut mock = MockBamReader::new(vec![record], None);
         let region = Region::new("chrX", 100, 200, "test_region");
-        let result = coverage_for_region(&mut mock, &region, 0, 0, None);
+        let result = coverage_for_region(&mut mock, &region, 0, 0);
         assert!(result.is_err());
     }
 
@@ -380,7 +379,7 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
         let mut mock = MockBamReader::new(vec![record1, record2, record3], None);
         let region = Region::new("chrQ_mirror", 100, 200, "test_region");
         let min_mapq = 20;
-        let result = coverage_for_region(&mut mock, &region, min_mapq, 0, None);
+        let result = coverage_for_region(&mut mock, &region, min_mapq, 0);
         assert!(result.is_ok());
         let coverage = result.unwrap();
         let max = coverage.max().expect("should have max");
@@ -416,7 +415,7 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
         let mut mock = MockBamReader::new(records, None);
         let region = Region::new("chrQ_mirror", 100, 200, "test_region");
         let flank = u64::MAX;
-        let result = coverage_for_region(&mut mock, &region, 0, flank, None);
+        let result = coverage_for_region(&mut mock, &region, 0, flank);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err
@@ -430,7 +429,7 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
         let mut mock = MockBamReader::new(records, None);
         let region = Region::new("chrQ_mirror", u64::MIN, 200, "test_region");
         let flank = u64::MAX - 10;
-        let result = coverage_for_region(&mut mock, &region, 0, flank, None);
+        let result = coverage_for_region(&mut mock, &region, 0, flank);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err
@@ -444,7 +443,7 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
         let mut mock = MockBamReader::new(records, None);
         let region = Region::new("chrQ_mirror", 100, 200, "test_region");
         let flank = 150;
-        let result = coverage_for_region(&mut mock, &region, 0, flank, None);
+        let result = coverage_for_region(&mut mock, &region, 0, flank);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err
