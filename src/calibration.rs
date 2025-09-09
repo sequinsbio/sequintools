@@ -455,7 +455,7 @@ where
                 })?;
 
         // The first window of the target region is calibrated against the last
-        // window of the sample region. This is intentional. The Sequin (taget)
+        // window of the sample region. This is intentional. The Sequin (target)
         // regions are the mirror of the sample region; therefore, we want to
         // mimic the coverage profile in reverse.
         let sample_starts = window_starts(reader, sample_region, window_size, min_mapq)?;
