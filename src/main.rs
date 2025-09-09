@@ -1,8 +1,12 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::{Args, Parser, Subcommand};
+use rust_htslib::bam;
+use sequintools::bam::{BamReader, BamWriter, HtslibBamReader, HtslibBamWriter};
+use sequintools::calibration::{self, CalibrationMode};
+use sequintools::region;
+use std::fs::File;
+use std::io::BufReader;
 use std::path::PathBuf;
-
-mod calibrate;
 
 #[derive(Parser, Debug)]
 #[clap(version)]
@@ -15,14 +19,14 @@ pub struct App {
 pub struct CalibrateArgs {
     /// flanking regions to omit from analysis (due to sequencing edge affects)
     #[arg(long, default_value_t = 500)]
-    flank: i32,
+    flank: u64,
 
     #[arg(short, long, default_value_t = 5678)]
     seed: u64,
 
     /// target fold-coverage
     #[arg(short, long, default_value_t = 40)]
-    fold_coverage: i64,
+    fold_coverage: u64,
 
     /// Size of sliding window when matching sample data coverage
     #[arg(short, long, default_value_t = 100)]
@@ -43,17 +47,17 @@ pub struct CalibrateArgs {
     /// Regions in the reference genome corresponding to the sequins, the name
     /// of each region must match those in the sequin BED file.
     #[arg(short = 'S', long = "sample-bed")]
-    sample_bed: Option<String>,
+    sample_bed: Option<PathBuf>,
 
     /// BED file specifying regions in which alignment coverage is calibrated.
     #[arg(short, long)]
-    bed: String,
+    bed: PathBuf,
 
     /// File to write summary report (CSV). Will contain uncalibrated, target
     /// and calibrated mean coverage of each sequin region. Only created when
     /// `--sample-bed` is provided.
     #[arg(long)]
-    summary_report: Option<String>,
+    summary_report: Option<PathBuf>,
 
     /// Change to experimental sample profile matching - unsuitable for
     /// production workflows.
@@ -62,17 +66,17 @@ pub struct CalibrateArgs {
 
     /// Write output to file (default standard output)
     #[arg(short, long)]
-    output: Option<String>,
+    output: Option<PathBuf>,
 
     /// Reference sequence FASTA file. Used when input is CRAM format.
     #[arg(short = 'T', long = "reference")]
-    reference: Option<String>,
+    reference: Option<PathBuf>,
 
     /// Write output as CRAM (requires --reference)
     #[arg(short = 'C', long = "cram", default_value_t = false)]
     cram: bool,
 
-    path: String,
+    path: PathBuf,
 }
 
 #[derive(Args, Debug)]
@@ -123,9 +127,82 @@ impl From<BedcovArgs> for sequintools::coverage::BedcovArgs {
 fn main() -> Result<()> {
     let args = App::parse();
     match args.command {
-        Commands::Calibrate(args) => calibrate::calibrate(args)?,
+        Commands::Calibrate(args) => {
+            run_calibrate(&args)?
+            // calibrate::calibrate(args)?,
+        }
         Commands::Bedcov(args) => sequintools::coverage::run(&args.into())?,
     };
+    Ok(())
+}
+
+fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
+    if args.cram && args.reference.is_none() {
+        bail!("--cram output requires --reference to be supplied");
+    }
+
+    let mut reader = HtslibBamReader::from_path(&args.path)?;
+    let ncpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    reader.set_threads(ncpus)?;
+    if let Some(reference) = args.reference.as_ref() {
+        reader.set_reference(reference)?;
+    }
+    let hdr = bam::Header::from_template(reader.header());
+    let format = if args.cram {
+        bam::Format::Cram
+    } else {
+        bam::Format::Bam
+    };
+
+    let mut writer = if let Some(output) = &args.output {
+        HtslibBamWriter::from_path(output, &hdr, format)?
+    } else {
+        HtslibBamWriter::from_stdout(&hdr, format)?
+    };
+    writer.set_threads(ncpus)?;
+    if let Some(reference) = args.reference.as_ref() {
+        writer.set_reference(reference)?;
+    }
+
+    let target_regions = region::load_from_bed(&mut BufReader::new(File::open(&args.bed)?))?;
+
+    let sample_regions = if let Some(sample_bed) = &args.sample_bed {
+        let regions = region::load_from_bed(&mut BufReader::new(File::open(sample_bed)?))?;
+        Some(regions)
+    } else {
+        None
+    };
+
+    // Determine the calibration mode based on the provided arguments
+    let mode = if args.experimental {
+        if let Some(sample_regions) = &sample_regions {
+            CalibrationMode::SampleProfile {
+                sample_regions,
+                flank: args.flank,
+                window_size: args.window_size,
+                min_mapq: args.min_mapq,
+                seed: args.seed,
+            }
+        } else {
+            return Err(anyhow::anyhow!(
+                "SampleProfile mode requires sample regions. Please provide a sample BED file."
+            ));
+        }
+    } else if let Some(sample_regions) = &sample_regions {
+        CalibrationMode::SampleMeanCoverage {
+            sample_regions,
+            seed: args.seed,
+        }
+    } else {
+        CalibrationMode::FixedCoverage {
+            fold_coverage: args.fold_coverage,
+            seed: args.seed,
+        }
+    };
+
+    calibration::calibrate(&mut reader, &mut writer, &target_regions, mode)?;
     Ok(())
 }
 
@@ -168,10 +245,13 @@ mod tests {
                 assert_eq!(calibrate_args.min_mapq, 20);
                 assert!(calibrate_args.write_index);
                 assert!(calibrate_args.exclude_uncalibrated_reads);
-                assert_eq!(calibrate_args.sample_bed.unwrap(), "sample.bed");
-                assert_eq!(calibrate_args.bed, "regions.bed");
-                assert_eq!(calibrate_args.output.unwrap(), "output.txt");
-                assert_eq!(calibrate_args.path, "path/to/data");
+                assert_eq!(
+                    calibrate_args.sample_bed.unwrap(),
+                    PathBuf::from("sample.bed")
+                );
+                assert_eq!(calibrate_args.bed, PathBuf::from("regions.bed"));
+                assert_eq!(calibrate_args.output.unwrap(), PathBuf::from("output.txt"));
+                assert_eq!(calibrate_args.path, PathBuf::from("path/to/data"));
             }
             _ => panic!("Expected Calibrate command"),
         }
@@ -212,10 +292,13 @@ mod tests {
                 assert_eq!(calibrate_args.min_mapq, 20);
                 assert!(calibrate_args.write_index);
                 assert!(calibrate_args.exclude_uncalibrated_reads);
-                assert_eq!(calibrate_args.sample_bed.unwrap(), "sample.bed");
-                assert_eq!(calibrate_args.bed, "regions.bed");
-                assert_eq!(calibrate_args.output.unwrap(), "output.txt");
-                assert_eq!(calibrate_args.path, "path/to/data");
+                assert_eq!(
+                    calibrate_args.sample_bed.unwrap(),
+                    PathBuf::from("sample.bed")
+                );
+                assert_eq!(calibrate_args.bed, PathBuf::from("regions.bed"));
+                assert_eq!(calibrate_args.output.unwrap(), PathBuf::from("output.txt"));
+                assert_eq!(calibrate_args.path, PathBuf::from("path/to/data"));
             }
             _ => panic!("Expected Calibrate command"),
         }
