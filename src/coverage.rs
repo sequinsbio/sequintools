@@ -266,9 +266,11 @@ pub fn run(args: &BedcovArgs) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bam::MockBamReader;
+    use crate::bam::{create_mock_record, MockBamReader};
     use rust_htslib::bam::record::CigarString;
     use rust_htslib::bam::Record;
+
+    const CHRQ_MIRROR_TID: i32 = 3;
 
     #[test]
     fn test_write_csv() {
@@ -337,10 +339,12 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
     #[test]
     fn test_coverage_for_region() {
         let mut record = Record::new();
+        record.set_tid(CHRQ_MIRROR_TID);
         record.set_pos(100);
         record.set_cigar(Some(&CigarString(vec![Cigar::Match(100)])));
         record.set_mapq(60);
         record.set_flags(99); // PAIRED,PROPER_PAIR,MREVERSE,READ1
+        record.unset_unmapped();
         let mut mock = MockBamReader::new(vec![record], None);
         let region = Region::new("chrQ_mirror", 100, 200, "test_region");
         let result = coverage_for_region(&mut mock, &region, 0, 0, None);
@@ -354,32 +358,24 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
     #[test]
     fn test_coverage_for_region_missing_chrom() {
         let mut record = Record::new();
+        record.set_tid(CHRQ_MIRROR_TID);
         record.set_pos(100);
         record.set_cigar(Some(&CigarString(vec![Cigar::Match(100)])));
         record.set_mapq(60);
         record.set_flags(99); // PAIRED,PROPER_PAIR,MREVERSE,READ1
+        record.unset_unmapped();
         let mut mock = MockBamReader::new(vec![record], None);
-        let region = Region::new("chr2", 100, 200, "test_region");
+        let region = Region::new("chrX", 100, 200, "test_region");
         let result = coverage_for_region(&mut mock, &region, 0, 0, None);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_coverage_for_region_skip_reads() {
-        let mut record1 = Record::new();
-        record1.set_pos(100);
-        record1.set_cigar(Some(&CigarString(vec![Cigar::Match(100)])));
-        record1.set_mapq(60);
-        record1.set_flags(99); // PAIRED,PROPER_PAIR,MREVERSE,READ1
-
-        let mut record2 = Record::new();
-        record2.set_pos(100);
-        record2.set_flags(68); // READ1,UNMAP
-
-        let mut record3 = Record::new();
-        record3.set_pos(100);
-        record3.set_flags(99); // PAIRED,PROPER_PAIR,MREVERSE,READ1
-        record3.set_mapq(0);
+        let record1 = create_mock_record(CHRQ_MIRROR_TID, 100, "read1");
+        let mut record2 = create_mock_record(CHRQ_MIRROR_TID, 100, "read2");
+        record2.set_mapq(10);
+        let record3 = create_mock_record(CHRQ_MIRROR_TID, 100, "read3");
 
         let mut mock = MockBamReader::new(vec![record1, record2, record3], None);
         let region = Region::new("chrQ_mirror", 100, 200, "test_region");
@@ -388,8 +384,8 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
         assert!(result.is_ok());
         let coverage = result.unwrap();
         let max = coverage.max().expect("should have max");
-        assert_eq!(*max, 1);
-        assert_eq!(coverage.mean().unwrap(), 1.0);
+        assert_eq!(*max, 2);
+        assert_eq!(coverage.mean().unwrap(), 2.0);
     }
 
     #[test]
