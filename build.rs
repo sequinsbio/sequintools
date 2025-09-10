@@ -13,5 +13,5 @@ fn main() {
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| version.clone());
 
-    println!("cargo:rustc-env=GIT_VERSION={}", git_output.trim());
+    println!("cargo:rustc-env=GIT_VERSION={}", git_output);
 }
