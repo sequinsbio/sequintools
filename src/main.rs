@@ -9,7 +9,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[clap(version)]
+#[clap(version = env!("GIT_VERSION"))]
 pub struct App {
     #[command(subcommand)]
     command: Commands,
