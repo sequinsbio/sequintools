@@ -127,10 +127,7 @@ impl From<BedcovArgs> for sequintools::coverage::BedcovArgs {
 fn main() -> Result<()> {
     let args = App::parse();
     match args.command {
-        Commands::Calibrate(args) => {
-            run_calibrate(&args)?
-            // calibrate::calibrate(args)?,
-        }
+        Commands::Calibrate(args) => run_calibrate(&args)?,
         Commands::Bedcov(args) => sequintools::coverage::run(&args.into())?,
     };
     Ok(())
