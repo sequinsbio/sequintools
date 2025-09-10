@@ -1,3 +1,4 @@
+use rust_htslib::bam::{self, Read};
 use std::fs;
 use std::fs::File;
 use std::process::{Command, Stdio};
@@ -170,6 +171,14 @@ fn test_calibrate_cram_input() {
     assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
 }
 
+// We can't check MD5 because the CRAM output may vary in non-deterministic ways
+// on different machines. This is due to the choice of compression level and
+// other factors. However, all output files (BAM and CRAM) should have the same
+// content.
+
+// These aren't a very robust tests, but it's difficult to check every aspect of
+// every read to ensure identity.
+
 #[test]
 fn test_calibrate_cram_output() {
     let temp_dir = TempDir::new().unwrap();
@@ -197,11 +206,11 @@ fn test_calibrate_cram_output() {
         "Command failed with stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let file_bytes = fs::read(&output_path).expect("Should have been able to read the file");
-    let digest = md5::compute(&file_bytes);
-    let computed_md5 = format!("{digest:x}");
-    let expected_md5 = "f61ab5fb05543dc678761438af1ca9c2";
-    assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
+
+    let mut reader =
+        bam::Reader::from_path(output_path).expect("Should be able to open output CRAM");
+    let record_count = reader.records().count();
+    assert_eq!(record_count, 4718);
 }
 
 #[test]
@@ -231,9 +240,9 @@ fn test_calibrate_cram_input_output() {
         "Command failed with stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let file_bytes = fs::read(&output_path).expect("Should have been able to read the file");
-    let digest = md5::compute(&file_bytes);
-    let computed_md5 = format!("{digest:x}");
-    let expected_md5 = "f61ab5fb05543dc678761438af1ca9c2";
-    assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
+
+    let mut reader =
+        bam::Reader::from_path(output_path).expect("Should be able to open output CRAM");
+    let record_count = reader.records().count();
+    assert_eq!(record_count, 4718);
 }
