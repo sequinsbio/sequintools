@@ -176,7 +176,7 @@ fn test_calibrate_cram_input() {
 // other factors. However, all output files (BAM and CRAM) should have the same
 // content.
 
-// These aren't a very robust tests, but it's difficult to check every aspect of
+// These aren't very robust tests, but it's difficult to check every aspect of
 // every read to ensure identity.
 
 #[test]
