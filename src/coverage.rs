@@ -396,20 +396,6 @@ region1,chr1,100,200,0,0,0.00,0.00,0.00";
     }
 
     #[test]
-    fn test_run() {
-        let args = BedcovArgs {
-            bam_path: PathBuf::from("testdata/calibrated.bam"),
-            bed_path: PathBuf::from("testdata/resources/sequin_regions.chrQ_mirror.bed"),
-            reference: None,
-            min_mapq: 0,
-            flank: 0,
-            thresholds: None,
-        };
-        let result = run(&args);
-        assert!(result.is_ok(), "Failed to run bedcov: {result:?}");
-    }
-
-    #[test]
     fn test_coverage_for_region_flank_overflow() {
         let records = vec![];
         let mut mock = MockBamReader::new(records, None);

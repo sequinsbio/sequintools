@@ -308,6 +308,7 @@ fn subsample(
     let rand = rng.random::<f64>();
     if rand <= threshold {
         hash.insert(qname, true);
+
         return Ok(true);
     }
     Ok(false)
@@ -443,7 +444,6 @@ where
 {
     for target_region in target_regions {
         eprintln!("Calibrating region {}.", target_region.name);
-
         let sample_region =
             sample_region_map
                 .get(&target_region.name)
@@ -453,7 +453,6 @@ where
                         target_region.name
                     ),
                 })?;
-
         // The first window of the target region is calibrated against the last
         // window of the sample region. This is intentional. The Sequin (target)
         // regions are the mirror of the sample region; therefore, we want to
@@ -469,7 +468,6 @@ where
         )?;
 
         let mut keep_names = HashSet::new();
-
         for (i, window_beg) in (target_region.beg..target_region.end)
             .step_by(window_size as usize)
             .enumerate()
@@ -492,7 +490,6 @@ where
                     }
                 })
                 .collect::<Vec<_>>();
-
             let numbers = choose_from(region_records.len() as u64, n_starts as u64, seed);
             for idx in &numbers {
                 let record = region_records[*idx as usize];
@@ -501,7 +498,6 @@ where
                 keep_names.insert(qname);
             }
         }
-
         for record in &records {
             let qname = String::from_utf8(record.qname().to_vec()).map_err(|e| e.utf8_error())?;
             if keep_names.contains(&qname) {
