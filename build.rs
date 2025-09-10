@@ -9,7 +9,15 @@ fn main() {
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
+        .and_then(|s| {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        })
         .unwrap_or_else(|| version.clone());
 
-    println!("cargo:rustc-env=GIT_VERSION={}", git_output.trim());
+    println!("cargo:rustc-env=GIT_VERSION={}", git_output);
 }
