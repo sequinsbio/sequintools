@@ -2,7 +2,7 @@
 # https://docs.docker.com/build/building/multi-stage/#use-multi-stage-builds
 
 # Stage 1: Build the rust app
-FROM mcr.microsoft.com/devcontainers/rust:1-1-bookworm AS builder
+FROM mcr.microsoft.com/devcontainers/rust:2-1-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   cmake=3.25.1-1 \
