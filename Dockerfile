@@ -11,13 +11,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /usr/sequins
 
+# Accept version string from build context (fallback handled in build.rs)
+ARG SEQUINTOOLS_GIT_VERSION
+ENV SEQUINTOOLS_GIT_VERSION=${SEQUINTOOLS_GIT_VERSION}
+
 # Copy the Cargo.toml and Cargo.lock files first
 COPY ./Cargo.toml ./Cargo.toml
 COPY ./Cargo.lock ./Cargo.lock
-
+COPY ./build.rs ./build.rs
 COPY ./src ./src
 
-RUN cargo build --release
+# Build with locked deps; build.rs will embed version using SEQUINTOOLS_GIT_VERSION if provided
+RUN cargo build --locked --release
 
 # Stage 2: Create final Docker image with debian-slim.
 FROM debian:13.0-slim
