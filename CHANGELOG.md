@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.0](https://github.com/sequinsbio/sequintools/compare/v0.8.5...v0.9.0) (2025-09-09)
+
+
+### Features
+
+* add BamReader trait ([#233](https://github.com/sequinsbio/sequintools/issues/233)) ([dd7e373](https://github.com/sequinsbio/sequintools/commit/dd7e37339d52712945fc5a6622815e3f57b28fe3))
+* add library coverage module ([#235](https://github.com/sequinsbio/sequintools/issues/235)) ([c2645ac](https://github.com/sequinsbio/sequintools/commit/c2645acee593924deeb6dedcb7668ff12a5a1429))
+* bedcov command uses new coverage module ([#236](https://github.com/sequinsbio/sequintools/issues/236)) ([d5945e7](https://github.com/sequinsbio/sequintools/commit/d5945e77085eade8f52d931a37b56564eb9d3315))
+
+
+### Bug Fixes
+
+* bedcov does not error when missing coverage ([#237](https://github.com/sequinsbio/sequintools/issues/237)) ([f5343f3](https://github.com/sequinsbio/sequintools/commit/f5343f359e7449493fecad1676eaa397828ecec1))
+
 ## [0.8.5](https://github.com/sequinsbio/sequintools/compare/v0.8.4...v0.8.5) (2025-08-26)
 
 
