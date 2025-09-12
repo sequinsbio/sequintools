@@ -57,6 +57,17 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Compute version string
+        id: version
+        run: |
+          if git describe --tags --dirty --always > /dev/null 2>&1; then
+            V=$(git describe --tags --dirty --always)
+          else
+            V=${GITHUB_SHA::7}
+          fi
+          echo "git_version=$V" >> $GITHUB_OUTPUT
+          echo "Computed version: $V"
+
       - name: Build container
         uses: docker/build-push-action@v6
         with:
@@ -66,3 +77,5 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            SEQUINTOOLS_GIT_VERSION=${{ steps.version.outputs.git_version }}
