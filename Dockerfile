@@ -14,7 +14,8 @@ WORKDIR /usr/sequins
 # Copy the Cargo.toml and Cargo.lock files first
 COPY ./Cargo.toml ./Cargo.toml
 COPY ./Cargo.lock ./Cargo.lock
-
+COPY ./build.rs ./build.rs
+COPY ./.git ./.git
 COPY ./src ./src
 
 RUN cargo build --release
