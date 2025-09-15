@@ -77,6 +77,7 @@ pub fn calibrate<R, W>(
     writer: &mut W,
     target_regions: &[Region],
     mode: CalibrationMode,
+    exclude_uncalibrated_reads: bool,
 ) -> Result<()>
 where
     R: BamReader,
@@ -87,7 +88,9 @@ where
         .map(|r| r.contig.as_str())
         .collect::<Vec<_>>();
 
-    copy_uncalibrated_contigs(reader, writer, &calibrated_contigs)?;
+    if !exclude_uncalibrated_reads {
+        copy_uncalibrated_contigs(reader, writer, &calibrated_contigs)?;
+    }
 
     match mode {
         CalibrationMode::FixedCoverage {
@@ -126,7 +129,9 @@ where
         }
     }
 
-    copy_unmapped_reads(reader, writer)?;
+    if !exclude_uncalibrated_reads {
+        copy_unmapped_reads(reader, writer)?;
+    }
 
     Ok(())
 }
@@ -722,7 +727,7 @@ mod tests {
             seed: 42,
         };
 
-        let result = calibrate(&mut reader, &mut writer, &target_regions, mode);
+        let result = calibrate(&mut reader, &mut writer, &target_regions, mode, false);
         assert!(result.is_ok());
 
         // Should have processed records (may be 0 or more)
@@ -758,7 +763,7 @@ mod tests {
             seed: 42,
         };
 
-        let result = calibrate(&mut reader, &mut writer, &target_regions, mode);
+        let result = calibrate(&mut reader, &mut writer, &target_regions, mode, false);
         assert!(result.is_ok());
         let records = writer.records();
         assert_eq!(records.len(), 5, "Records: {records:?}"); // Should have downsampled to match sample mean
@@ -797,7 +802,7 @@ mod tests {
             seed: 42,
         };
 
-        let result = calibrate(&mut reader, &mut writer, &target_regions, mode);
+        let result = calibrate(&mut reader, &mut writer, &target_regions, mode, false);
         assert!(result.is_ok());
         // let records = writer.records();
         // assert_eq!(records.len(), 10);
@@ -815,7 +820,7 @@ mod tests {
             seed: 42,
         };
 
-        let result = calibrate(&mut reader, &mut writer, &target_regions, mode);
+        let result = calibrate(&mut reader, &mut writer, &target_regions, mode, false);
         assert!(result.is_ok());
     }
 
