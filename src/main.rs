@@ -199,7 +199,13 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
         }
     };
 
-    calibration::calibrate(&mut reader, &mut writer, &target_regions, mode)?;
+    calibration::calibrate(
+        &mut reader,
+        &mut writer,
+        &target_regions,
+        mode,
+        args.exclude_uncalibrated_reads,
+    )?;
     Ok(())
 }
 
