@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.1](https://github.com/sequinsbio/sequintools/compare/v0.9.0...v0.9.1) (2025-09-16)
+
+
+### Bug Fixes
+
+* add build.rs to docker build ([#253](https://github.com/sequinsbio/sequintools/issues/253)) ([061a047](https://github.com/sequinsbio/sequintools/commit/061a047bb55c529dd3242bcaf524e472b5be6e4a))
+* exclude uncalibrated when flag set ([#254](https://github.com/sequinsbio/sequintools/issues/254)) ([264dd17](https://github.com/sequinsbio/sequintools/commit/264dd170210f584b9fcf597d1b78c5cf13ccb23f))
+
 ## [0.9.0](https://github.com/sequinsbio/sequintools/compare/v0.8.5...v0.9.0) (2025-09-09)
 
 
