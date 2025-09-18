@@ -206,6 +206,25 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
         mode,
         args.exclude_uncalibrated_reads,
     )?;
+
+    // Minimum size for CSI indicies, 14 is the default used by samtools.
+    let min_shift = 14;
+
+    // We can't index the output file if the proper EOF marker isn't written, so
+    // we need to ensure the writer is dropped before indexing.
+    drop(writer);
+
+    if args.write_index {
+        if let Some(output) = &args.output {
+            let format = match output.extension().and_then(|ext| ext.to_str()) {
+                Some("bam") => bam::index::Type::Bai,
+                Some("cram") => bam::index::Type::Csi(min_shift),
+                _ => bail!("output file must have .bam or .cram extension to write index"),
+            };
+            bam::index::build(output, None, format, ncpus as u32)?;
+        }
+    }
+
     Ok(())
 }
 
