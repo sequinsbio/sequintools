@@ -752,7 +752,7 @@ mod tests {
         let header = reader.header();
         assert!(header.target_count() > 0, "Header has no targets");
 
-        let reference = PathBuf::from("testdata/reference.fasta");
+        let reference = PathBuf::from("testdata/genome_with_sequins.fasta");
         assert!(
             reader.set_reference(reference).is_ok(),
             "Failed to set reference"
@@ -762,7 +762,7 @@ mod tests {
             .fetch(FetchDefinition::All)
             .expect("Failed to fetch all");
         let n = reader.records().count();
-        let expected = 4364;
+        let expected = 9280;
         assert_eq!(
             n, expected,
             "Unexpected number of records: expected {expected}, got {n}"

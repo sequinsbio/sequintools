@@ -8,9 +8,10 @@ use tempfile::TempDir;
 fn test_cli_bedcov() {
     let expected_output = "\
 name,chrom,beg,end,min,max,mean,std,cv
-variant_1,chrQ_mirror,200,3200,0,51,34.56,11.56,0.33
-variant_2,chrQ_mirror,3400,6400,0,50,30.89,11.59,0.38
-variant_3,chrQ_mirror,6600,9600,0,57,36.69,12.90,0.35";
+variant_1,chrQ_mirror,200,3200,0,172,116.84,39.77,0.34
+variant_2,chrQ_mirror,3400,6400,0,163,113.95,37.87,0.33
+variant_3,chrQ_mirror,6600,9600,0,163,116.94,39.02,0.33";
+
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("output.csv");
     let file = File::create(&output_path).unwrap();
@@ -201,6 +202,7 @@ fn test_calibrate_cram_output() {
             "--cram",
             "-o",
             output_path.to_str().unwrap(),
+            "--write-index",
             "testdata/uncalibrated.bam",
         ])
         .output()
@@ -212,9 +214,12 @@ fn test_calibrate_cram_output() {
     );
 
     let mut reader =
-        bam::Reader::from_path(output_path).expect("Should be able to open output CRAM");
+        bam::Reader::from_path(&output_path).expect("Should be able to open output CRAM");
     let record_count = reader.records().count();
     assert_eq!(record_count, 4718);
+    let mut index_path = output_path.clone();
+    index_path.set_extension("cram.crai");
+    assert!(index_path.exists(), "No such file: {index_path:?}");
 }
 
 #[test]
