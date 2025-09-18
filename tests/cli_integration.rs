@@ -53,6 +53,7 @@ fn test_calibrate_fixed_coverage() {
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
             "-o",
             output_path.to_str().unwrap(),
+            "--write-index",
             "testdata/uncalibrated.bam",
         ])
         .output()
@@ -68,6 +69,9 @@ fn test_calibrate_fixed_coverage() {
     let computed_md5 = format!("{digest:x}");
     let expected_md5 = "f7441d6fac943fcc1649af48d34ef77c";
     assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
+    let mut index_path = output_path.clone();
+    index_path.set_extension("bam.bai");
+    assert!(index_path.exists(), "No such file: {index_path:?}");
 }
 
 #[test]
