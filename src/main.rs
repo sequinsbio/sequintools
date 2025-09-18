@@ -206,6 +206,18 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
         mode,
         args.exclude_uncalibrated_reads,
     )?;
+
+    if args.write_index {
+        if let Some(output) = &args.output {
+            let format = match output.extension().and_then(|ext| ext.to_str()) {
+                Some("bam") => bam::index::Type::Bai,
+                Some("cram") => bam::index::Type::Csi(14),
+                _ => bail!("output file must have .bam or .cram extension to write index"),
+            };
+            bam::index::build(output, None, format, ncpus as u32)?;
+        }
+    }
+
     Ok(())
 }
 
