@@ -210,6 +210,10 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
     // Minimum size for CSI indicies, 14 is the default used by samtools.
     let min_shift = 14;
 
+    // We can't index the output file if the proper EOF marker isn't written, so
+    // we need to ensure the writer is dropped before indexing.
+    drop(writer);
+
     if args.write_index {
         if let Some(output) = &args.output {
             let format = match output.extension().and_then(|ext| ext.to_str()) {
