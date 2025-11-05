@@ -149,15 +149,19 @@ where
             calibrate_by_sample_profile(reader, writer, target_regions, sample_regions, &args)?;
         }
     }
-
     reader.fetch(FetchDefinition::All)?;
     for result in reader.records() {
         let record = result?;
+        let record_is_on_sequin_decoy = sequin_tids.contains(&record.tid());
+        let mate_is_on_sequin_decoy = sequin_tids.contains(&record.mtid());
         if keep.contains(record.qname()) {
             // If the read is part of a read group selected to keep, write it
             // regardless of anything else.
             writer.write(&record)?;
-        } else if !sequin_tids.contains(&record.mtid()) && !exclude_uncalibrated_reads {
+        } else if !record_is_on_sequin_decoy
+            && !mate_is_on_sequin_decoy
+            && !exclude_uncalibrated_reads
+        {
             // If we are keeping uncalibrated reads, and the mate is not mapped
             // to a Sequin decoy, write it to the output.
             writer.write(&record)?;
@@ -345,9 +349,6 @@ fn subsample(
             if considered.contains(&qname) {
                 return false;
             }
-            // if record.pos() >= record.mpos() {
-            //     return false;
-            // }
         }
     };
     let rand = rng.random::<f64>();
@@ -717,16 +718,16 @@ mod tests {
 
     #[test]
     fn test_calibrate_fixed_coverage_mode_different_chromosomes() {
-        let mut r1 = create_mock_record(CHRQ_MIRROR_TID, 150, "read1");
-        let r2 = create_mock_record(CHRQ_MIRROR_TID, 150, "read2");
-        let r3 = create_mock_record(CHRQ_MIRROR_TID, 150, "read3");
-        let r4 = create_mock_record(CHRQ_MIRROR_TID, 150, "read4");
-        let r5 = create_mock_record(CHRQ_MIRROR_TID, 150, "read5");
-        let r6 = create_mock_record(CHRQ_MIRROR_TID, 150, "read6");
-        let r7 = create_mock_record(CHRQ_MIRROR_TID, 150, "read7");
-        let r8 = create_mock_record(CHRQ_MIRROR_TID, 150, "read8");
-        let r9 = create_mock_record(CHRQ_MIRROR_TID, 150, "read9");
-        let r10 = create_mock_record(CHRQ_MIRROR_TID, 150, "read10");
+        let mut r1 = create_mock_record(CHRQ_MIRROR_TID, 100, "read1");
+        let r2 = create_mock_record(CHRQ_MIRROR_TID, 100, "read2");
+        let r3 = create_mock_record(CHRQ_MIRROR_TID, 100, "read3");
+        let r4 = create_mock_record(CHRQ_MIRROR_TID, 100, "read4");
+        let r5 = create_mock_record(CHRQ_MIRROR_TID, 100, "read5");
+        let r6 = create_mock_record(CHRQ_MIRROR_TID, 100, "read6");
+        let r7 = create_mock_record(CHRQ_MIRROR_TID, 100, "read7");
+        let r8 = create_mock_record(CHRQ_MIRROR_TID, 100, "read8");
+        let r9 = create_mock_record(CHRQ_MIRROR_TID, 100, "read9");
+        let r10 = create_mock_record(CHRQ_MIRROR_TID, 100, "read10");
 
         r1.set_paired();
         r1.set_first_in_template();
@@ -743,7 +744,13 @@ mod tests {
         };
         let result = calibrate(&mut reader, &mut writer, &target_regions, mode, false);
         assert!(result.is_ok(), "Result: {:?}", result);
-        // assert_eq!(writer.records().len(), 9);
+        assert_eq!(writer.records().len(), 4);
+        // We should not have any records with mates on chr1
+        let rs = writer.records().iter().all(|rec| {
+            let mate_tid = rec.mtid();
+            mate_tid != CHR1_TID
+        });
+        assert!(rs);
     }
 
     #[test]
@@ -977,8 +984,9 @@ mod tests {
         // Test with probability 0.0 using a different record
         let mut record2 = create_mock_record(0, 200, "read2");
         record2.set_mpos(250);
-        let result = subsample(&record2, &mut hash, &considered, 1.0, &mut rng);
-        assert!(result);
+        let mut hash = HashSet::new();
+        let result = subsample(&record2, &mut hash, &considered, 0.0, &mut rng);
+        assert!(!result);
     }
 
     #[test]
