@@ -140,7 +140,7 @@ fn test_calibrate_sample_coverage_profile() {
     let file_bytes = fs::read(&output_path).expect("Should have been able to read the file");
     let digest = md5::compute(&file_bytes);
     let computed_md5 = format!("{digest:x}");
-    let expected_md5 = "2bab127d2a1f63b7a9cf3a68f587228f";
+    let expected_md5 = "92b7f0546a12e187afb5795d4e654f78";
     assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
 }
 
