@@ -71,7 +71,6 @@ pub enum CalibrationMode<'a> {
 ///
 /// # Errors
 /// This function can return errors from BAM reading/writing operations or if calibration parameters are invalid.
-#[allow(dead_code)]
 pub fn calibrate<R, W>(
     reader: &mut R,
     writer: &mut W,
@@ -994,9 +993,9 @@ mod tests {
         let considered = HashSet::new();
         let mut rng = Pcg32::seed_from_u64(42);
 
-        // Duplicate reads should always be filtered out
+        // Duplicate reads should be considered just like any other read.
         let result = subsample(&record, &mut hash, &considered, 1.0, &mut rng);
-        assert!(!result);
+        assert!(result);
     }
 
     #[test]
