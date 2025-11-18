@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.3](https://github.com/sequinsbio/sequintools/compare/v0.9.2...v0.9.3) (2025-11-18)
+
+
+### Bug Fixes
+
+* **deps:** bump clap from 4.5.48 to 4.5.49 ([#266](https://github.com/sequinsbio/sequintools/issues/266)) ([c21b8ff](https://github.com/sequinsbio/sequintools/commit/c21b8ff4462bf33b1c73bb5d109d22ee3ca42197))
+* **deps:** bump clap from 4.5.49 to 4.5.50 ([#270](https://github.com/sequinsbio/sequintools/issues/270)) ([a810486](https://github.com/sequinsbio/sequintools/commit/a8104861f44db03ccb868d864374b1cb16e103b2))
+* **deps:** bump clap from 4.5.50 to 4.5.51 ([#271](https://github.com/sequinsbio/sequintools/issues/271)) ([2683272](https://github.com/sequinsbio/sequintools/commit/26832728a362fb92b16ddc33b807be64f8c5c4e0))
+* **deps:** bump csv from 1.3.1 to 1.4.0 ([#268](https://github.com/sequinsbio/sequintools/issues/268)) ([d43f8ff](https://github.com/sequinsbio/sequintools/commit/d43f8fff0f29fa77f6396faeaeb82ff6a10cfdd0))
+* **deps:** bump rust-htslib from 0.50.0 to 0.51.0 ([#267](https://github.com/sequinsbio/sequintools/issues/267)) ([93c8fe7](https://github.com/sequinsbio/sequintools/commit/93c8fe7b91fec56c32b9a5655237aaceb493ad6e))
+
 ## [0.9.2](https://github.com/sequinsbio/sequintools/compare/v0.9.1...v0.9.2) (2025-09-30)
 
 
