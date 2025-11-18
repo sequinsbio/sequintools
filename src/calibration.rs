@@ -281,7 +281,7 @@ fn determine_downsampling_probabilities<R: BamReader>(
             if target_mean < sample_mean {
                 return Err(Error::Calibration {
                     msg: format!(
-                        "Target mean coverage for region {} is less than sample mean coverage",
+                        "Target mean coverage for region {} is less than sample mean coverage ({target_mean} < {sample_mean}",
                         name
                     ),
                 });
@@ -337,9 +337,6 @@ fn subsample(
     threshold: f64,
     rng: &mut Pcg32,
 ) -> bool {
-    if record.is_duplicate() {
-        return false;
-    }
     let qname = record.qname().to_vec();
     match hash.contains(&qname) {
         true => {
