@@ -14,7 +14,7 @@ use crate::region::Region;
 use rand::seq::IteratorRandom;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
-use rust_htslib::bam::Record;
+use rust_htslib::bam::{FetchDefinition, Record};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -71,7 +71,6 @@ pub enum CalibrationMode<'a> {
 ///
 /// # Errors
 /// This function can return errors from BAM reading/writing operations or if calibration parameters are invalid.
-#[allow(dead_code)]
 pub fn calibrate<R, W>(
     reader: &mut R,
     writer: &mut W,
@@ -83,21 +82,41 @@ where
     R: BamReader,
     W: BamWriter,
 {
-    let calibrated_contigs = target_regions
+    let sequin_chromosomes = target_regions
         .iter()
-        .map(|r| r.contig.as_str())
-        .collect::<Vec<_>>();
+        .map(|r| r.contig.as_bytes())
+        .collect::<HashSet<_>>();
 
-    if !exclude_uncalibrated_reads {
-        copy_uncalibrated_contigs(reader, writer, &calibrated_contigs)?;
-    }
+    let sequin_tids = reader
+        .header()
+        .target_names()
+        .iter()
+        .enumerate()
+        .filter_map(|(tid, name)| {
+            if sequin_chromosomes.contains(name) {
+                Some(tid as i32)
+            } else {
+                None
+            }
+        })
+        .collect::<HashSet<_>>();
+
+    let mut keep = HashSet::new();
 
     match mode {
         CalibrationMode::FixedCoverage {
             fold_coverage,
             seed,
         } => {
-            calibrate_by_fixed_coverage(reader, writer, target_regions, None, fold_coverage, seed)?;
+            calibrate_by_fixed_coverage(
+                reader,
+                target_regions,
+                None,
+                &mut keep,
+                &sequin_tids,
+                fold_coverage,
+                seed,
+            )?;
         }
         CalibrationMode::SampleMeanCoverage {
             sample_regions,
@@ -105,9 +124,10 @@ where
         } => {
             calibrate_by_fixed_coverage(
                 reader,
-                writer,
                 target_regions,
                 Some(sample_regions),
+                &mut keep,
+                &sequin_tids,
                 0,
                 seed,
             )?;
@@ -128,9 +148,23 @@ where
             calibrate_by_sample_profile(reader, writer, target_regions, sample_regions, &args)?;
         }
     }
-
-    if !exclude_uncalibrated_reads {
-        copy_unmapped_reads(reader, writer)?;
+    reader.fetch(FetchDefinition::All)?;
+    for result in reader.records() {
+        let record = result?;
+        let record_is_on_sequin_decoy = sequin_tids.contains(&record.tid());
+        let mate_is_on_sequin_decoy = sequin_tids.contains(&record.mtid());
+        if keep.contains(record.qname()) {
+            // If the read is part of a read group selected to keep, write it
+            // regardless of anything else.
+            writer.write(&record)?;
+        } else if !record_is_on_sequin_decoy
+            && !mate_is_on_sequin_decoy
+            && !exclude_uncalibrated_reads
+        {
+            // If we are keeping uncalibrated reads, and the mate is not mapped
+            // to a Sequin decoy, write it to the output.
+            writer.write(&record)?;
+        }
     }
 
     Ok(())
@@ -138,30 +172,33 @@ where
 
 /// Calibrates by fixed coverage or sample mean coverage.
 ///
-/// This function determines downsampling probabilities based on target and sample regions,
-/// then subsamples reads in the target regions accordingly.
+/// This function determines downsampling probabilities based on target and
+/// sample regions, then subsamples reads in the target regions accordingly. If
+/// it decides to keep a read group it inserts the name into the `keep` set.
+/// This can then be used to filter the calibrated reads.
 ///
 /// # Arguments
 /// - `reader`: A mutable reference to a BAM reader.
-/// - `writer`: A mutable reference to a BAM writer.
 /// - `target_regions`: Regions to calibrate.
 /// - `sample_regions`: Optional sample regions for mean coverage.
+/// - `keep`: A mutable set to store names of read groups to keep.
+/// - `sequin_tids`: Set of TIDs corresponding to Sequin chromosomes.
 /// - `fold_coverage`: Desired fold coverage (ignored if sample_regions is provided).
 /// - `seed`: Random seed for downsampling.
 ///
 /// # Returns
 /// A `Result` indicating success or failure.
-fn calibrate_by_fixed_coverage<R, W>(
+fn calibrate_by_fixed_coverage<R>(
     reader: &mut R,
-    writer: &mut W,
     target_regions: &[Region],
     sample_regions: Option<&[Region]>,
+    keep: &mut HashSet<Vec<u8>>,
+    sequin_tids: &HashSet<i32>,
     fold_coverage: u64,
     seed: u64,
 ) -> Result<()>
 where
     R: BamReader,
-    W: BamWriter,
 {
     let probabilities = determine_downsampling_probabilities(
         reader,
@@ -171,25 +208,27 @@ where
     )?;
 
     let mut rng = Pcg32::seed_from_u64(seed);
-    let mut keep_names = HashMap::new();
-
+    let mut considered = HashSet::new();
     for region in target_regions {
         reader.fetch((&region.contig, region.beg, region.end))?;
         for result in reader.records() {
             let record = result?;
-            let probability =
-                probabilities
-                    .get(&region.name)
-                    .cloned()
-                    .ok_or_else(|| Error::Calibration {
-                        msg: format!(
-                            "No downsampling probability found for region {} {:?}",
-                            region.name, probabilities
-                        ),
-                    })?;
-            if subsample(&record, &mut keep_names, probability, &mut rng)? {
-                writer.write(&record)?;
+            // If the mate is mapped to a non-sequin chromosome, skip it. These
+            // are artefacts, and we shouldn't keep them.
+            if sequin_tids.contains(&record.mtid()) {
+                let probability =
+                    probabilities
+                        .get(&region.name)
+                        .cloned()
+                        .ok_or_else(|| Error::Calibration {
+                            msg: format!(
+                                "No downsampling probability found for region {} {:?}",
+                                region.name, probabilities
+                            ),
+                        })?;
+                subsample(&record, keep, &considered, probability, &mut rng);
             }
+            considered.insert(record.qname().to_vec());
         }
     }
 
@@ -241,7 +280,7 @@ fn determine_downsampling_probabilities<R: BamReader>(
             if target_mean < sample_mean {
                 return Err(Error::Calibration {
                     msg: format!(
-                        "Target mean coverage for region {} is less than sample mean coverage",
+                        "Target mean coverage for region {} is less than sample mean coverage ({target_mean} < {sample_mean}",
                         name
                     ),
                 });
@@ -292,31 +331,28 @@ fn regions_coverage<R: BamReader>(
 /// `true` if the read should be kept, `false` otherwise.
 fn subsample(
     record: &Record,
-    hash: &mut HashMap<String, bool>,
+    hash: &mut HashSet<Vec<u8>>,
+    considered: &HashSet<Vec<u8>>,
     threshold: f64,
     rng: &mut Pcg32,
-) -> Result<bool> {
-    if record.is_duplicate() {
-        return Ok(false);
-    }
-    let qname = String::from_utf8(record.qname().to_vec()).map_err(|e| Error::Calibration {
-        msg: format!("subsample: invalid read name: {:?}", e),
-    })?;
-    match hash.get(&qname) {
-        Some(_) => return Ok(true),
-        None => {
-            if record.pos() > record.mpos() {
-                return Ok(false);
+) -> bool {
+    let qname = record.qname().to_vec();
+    match hash.contains(&qname) {
+        true => {
+            return true;
+        }
+        false => {
+            if considered.contains(&qname) {
+                return false;
             }
         }
     };
     let rand = rng.random::<f64>();
     if rand <= threshold {
-        hash.insert(qname, true);
-
-        return Ok(true);
+        hash.insert(record.qname().to_vec());
+        return true;
     }
-    Ok(false)
+    false
 }
 
 /// Parameters for sample profile calibration.
@@ -614,65 +650,6 @@ fn choose_from(size: u64, n: u64, seed: u64) -> Vec<u64> {
     (0..size).choose_multiple(&mut rng, n as usize)
 }
 
-/// Copies reads from uncalibrated contigs to the output.
-///
-/// # Arguments
-/// - `reader`: A mutable reference to a BAM reader.
-/// - `writer`: A mutable reference to a BAM writer.
-/// - `calibrated_contigs`: List of calibrated contig names.
-///
-/// # Returns
-/// A `Result` indicating success or failure.
-fn copy_uncalibrated_contigs<R, W>(
-    reader: &mut R,
-    writer: &mut W,
-    calibrated_contigs: &[&str],
-) -> Result<()>
-where
-    R: BamReader,
-    W: BamWriter,
-{
-    let hdr = reader.header().to_owned();
-    let calibrated_tids: Vec<u32> = (0..hdr.target_count())
-        .filter(|tid| {
-            let name = String::from_utf8_lossy(hdr.tid2name(*tid));
-            calibrated_contigs.contains(&name.as_ref())
-        })
-        .collect();
-    for tid in 0..hdr.target_count() {
-        if calibrated_tids.contains(&tid) {
-            continue;
-        }
-        reader.fetch(tid)?;
-        for result in reader.records() {
-            let record = result?;
-            writer.write(&record)?;
-        }
-    }
-    Ok(())
-}
-
-/// Copies unmapped reads to the output.
-///
-/// # Arguments
-/// - `reader`: A mutable reference to a BAM reader.
-/// - `writer`: A mutable reference to a BAM writer.
-///
-/// # Returns
-/// A `Result` indicating success or failure.
-fn copy_unmapped_reads<R, W>(reader: &mut R, writer: &mut W) -> Result<()>
-where
-    R: BamReader,
-    W: BamWriter,
-{
-    reader.fetch("*")?;
-    for result in reader.records() {
-        let record = result?;
-        writer.write(&record)?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -695,6 +672,7 @@ mod tests {
         // let seq = b"A".repeat(100);
         let cigar_string = CigarString(vec![Cigar::Match(100)]);
         record.set_cigar(Some(&cigar_string));
+        record.set_mtid(tid);
         record
     }
 
@@ -735,6 +713,43 @@ mod tests {
     }
 
     #[test]
+    fn test_calibrate_fixed_coverage_mode_different_chromosomes() {
+        let mut r1 = create_mock_record(CHRQ_MIRROR_TID, 100, "read1");
+        let r2 = create_mock_record(CHRQ_MIRROR_TID, 100, "read2");
+        let r3 = create_mock_record(CHRQ_MIRROR_TID, 100, "read3");
+        let r4 = create_mock_record(CHRQ_MIRROR_TID, 100, "read4");
+        let r5 = create_mock_record(CHRQ_MIRROR_TID, 100, "read5");
+        let r6 = create_mock_record(CHRQ_MIRROR_TID, 100, "read6");
+        let r7 = create_mock_record(CHRQ_MIRROR_TID, 100, "read7");
+        let r8 = create_mock_record(CHRQ_MIRROR_TID, 100, "read8");
+        let r9 = create_mock_record(CHRQ_MIRROR_TID, 100, "read9");
+        let r10 = create_mock_record(CHRQ_MIRROR_TID, 100, "read10");
+
+        r1.set_paired();
+        r1.set_first_in_template();
+        r1.set_mate_reverse();
+        r1.set_mtid(CHR1_TID);
+
+        let records = vec![r1, r2, r3, r4, r5, r6, r7, r8, r9, r10];
+        let mut reader = create_mock_reader_with_records(records);
+        let mut writer = MockBamWriter::new();
+        let target_regions = vec![Region::new("chrQ_mirror", 100, 200, "region1")];
+        let mode = CalibrationMode::FixedCoverage {
+            fold_coverage: 5,
+            seed: 42,
+        };
+        let result = calibrate(&mut reader, &mut writer, &target_regions, mode, false);
+        assert!(result.is_ok(), "Result: {:?}", result);
+        assert_eq!(writer.records().len(), 4);
+        // We should not have any records with mates on chr1
+        let rs = writer.records().iter().all(|rec| {
+            let mate_tid = rec.mtid();
+            mate_tid != CHR1_TID
+        });
+        assert!(rs);
+    }
+
+    #[test]
     fn test_calibrate_sample_mean_coverage_mode() {
         let records = vec![
             create_mock_record(CHR1_TID, 100, "read1"),
@@ -742,16 +757,16 @@ mod tests {
             create_mock_record(CHR1_TID, 100, "read3"),
             create_mock_record(CHR1_TID, 100, "read4"),
             create_mock_record(CHR1_TID, 100, "read5"),
-            create_mock_record(CHRQ_MIRROR_TID, 100, "read1"),
-            create_mock_record(CHRQ_MIRROR_TID, 100, "read2"),
-            create_mock_record(CHRQ_MIRROR_TID, 100, "read3"),
-            create_mock_record(CHRQ_MIRROR_TID, 100, "read4"),
-            create_mock_record(CHRQ_MIRROR_TID, 100, "read5"),
             create_mock_record(CHRQ_MIRROR_TID, 100, "read6"),
             create_mock_record(CHRQ_MIRROR_TID, 100, "read7"),
             create_mock_record(CHRQ_MIRROR_TID, 100, "read8"),
             create_mock_record(CHRQ_MIRROR_TID, 100, "read9"),
             create_mock_record(CHRQ_MIRROR_TID, 100, "read10"),
+            create_mock_record(CHRQ_MIRROR_TID, 100, "read11"),
+            create_mock_record(CHRQ_MIRROR_TID, 100, "read12"),
+            create_mock_record(CHRQ_MIRROR_TID, 100, "read13"),
+            create_mock_record(CHRQ_MIRROR_TID, 100, "read14"),
+            create_mock_record(CHRQ_MIRROR_TID, 100, "read15"),
         ];
         let mut reader = create_mock_reader_with_records(records);
         let mut writer = MockBamWriter::new();
@@ -763,10 +778,11 @@ mod tests {
             seed: 42,
         };
 
-        let result = calibrate(&mut reader, &mut writer, &target_regions, mode, false);
+        let result = calibrate(&mut reader, &mut writer, &target_regions, mode, true);
         assert!(result.is_ok());
         let records = writer.records();
-        assert_eq!(records.len(), 5, "Records: {records:?}"); // Should have downsampled to match sample mean
+        assert_eq!(records.len(), 5, "Records: ({}) {records:?}", records.len());
+        // Should have downsampled to match sample mean
     }
 
     // It's much harder to reason about what the correct result should be here.
@@ -953,33 +969,33 @@ mod tests {
     fn test_subsample() {
         let mut record = create_mock_record(0, 100, "read1");
         record.set_mpos(150); // Set mate position to be greater than pos
-        let mut hash = HashMap::new();
+        let mut hash = HashSet::new();
+        let considered = HashSet::new();
         let mut rng = Pcg32::seed_from_u64(42);
 
         // Test with probability 1.0 (should always keep)
-        let result = subsample(&record, &mut hash, 1.0, &mut rng);
-        assert!(result.is_ok());
-        assert!(result.unwrap());
+        let result = subsample(&record, &mut hash, &considered, 1.0, &mut rng);
+        assert!(result);
 
         // Test with probability 0.0 using a different record
         let mut record2 = create_mock_record(0, 200, "read2");
         record2.set_mpos(250);
-        let result = subsample(&record2, &mut hash, 0.0, &mut rng);
-        assert!(result.is_ok());
-        assert!(!result.unwrap());
+        let mut hash = HashSet::new();
+        let result = subsample(&record2, &mut hash, &considered, 0.0, &mut rng);
+        assert!(!result);
     }
 
     #[test]
     fn test_subsample_duplicate_read() {
         let mut record = create_mock_record(0, 100, "read1");
         record.set_flags(1024); // Set duplicate flag
-        let mut hash = HashMap::new();
+        let mut hash = HashSet::new();
+        let considered = HashSet::new();
         let mut rng = Pcg32::seed_from_u64(42);
 
-        // Duplicate reads should always be filtered out
-        let result = subsample(&record, &mut hash, 1.0, &mut rng);
-        assert!(result.is_ok(), "Expected Ok, got {:?}", result.err());
-        assert!(!result.unwrap());
+        // Duplicate reads should be considered just like any other read.
+        let result = subsample(&record, &mut hash, &considered, 1.0, &mut rng);
+        assert!(result);
     }
 
     #[test]
@@ -1110,61 +1126,6 @@ mod tests {
     }
 
     #[test]
-    fn test_copy_uncalibrated_contigs() {
-        let records = vec![
-            create_mock_record(CHR1_TID, 100, "read1"), // chrQ_mirror
-        ];
-        let mut reader = create_mock_reader_with_records(records);
-        let mut writer = MockBamWriter::new();
-
-        let calibrated_contigs = vec!["chrQ_mirror"];
-
-        let result = copy_uncalibrated_contigs(&mut reader, &mut writer, &calibrated_contigs);
-        assert!(result.is_ok());
-
-        let records = writer.records().iter().collect::<Vec<_>>();
-        assert_eq!(records.len(), 1, "Got: {records:?}");
-        // assert_eq!(writer.records().len(), 1,);
-    }
-
-    #[test]
-    fn test_copy_uncalibrated_contigs_all_calibrated() {
-        let records = vec![
-            create_mock_record(CHRQ_MIRROR_TID, 100, "read1"),
-            create_mock_record(CHRQ_MIRROR_TID, 200, "read2"),
-        ];
-        let mut reader = create_mock_reader_with_records(records);
-        let mut writer = MockBamWriter::new();
-
-        let calibrated_contigs = vec!["chrQ_mirror"];
-
-        let result = copy_uncalibrated_contigs(&mut reader, &mut writer, &calibrated_contigs);
-        assert!(result.is_ok());
-
-        // Should have copied no records (all contigs calibrated)
-        assert_eq!(writer.records().len(), 0,);
-    }
-
-    #[test]
-    fn test_copy_unmapped_reads() {
-        let records = vec![
-            {
-                let mut r = create_mock_record(0, 100, "read1");
-                r.set_unmapped();
-                r
-            },
-            create_mock_record(0, 200, "read2"),
-        ];
-        let mut reader = create_mock_reader_with_records(records);
-        let mut writer = MockBamWriter::new();
-
-        let result = copy_unmapped_reads(&mut reader, &mut writer);
-        assert!(result.is_ok());
-
-        assert_eq!(writer.records().len(), 1);
-    }
-
-    #[test]
     fn test_calibrate_by_fixed_coverage() {
         let records = vec![
             create_mock_record(CHRQ_MIRROR_TID, 100, "read1"),
@@ -1179,12 +1140,19 @@ mod tests {
             create_mock_record(CHRQ_MIRROR_TID, 100, "read10"),
         ];
         let mut reader = create_mock_reader_with_records(records);
-        let mut writer = MockBamWriter::new();
 
         let target_regions = vec![Region::new("chrQ_mirror", 100, 200, "region1")];
-
-        let result =
-            calibrate_by_fixed_coverage(&mut reader, &mut writer, &target_regions, None, 5, 42);
+        let mut keep = HashSet::new();
+        let sequin_tids = [CHRQ_MIRROR_TID].iter().cloned().collect::<HashSet<_>>();
+        let result = calibrate_by_fixed_coverage(
+            &mut reader,
+            &target_regions,
+            None,
+            &mut keep,
+            &sequin_tids,
+            5,
+            42,
+        );
         assert!(result.is_ok(), "Expected Ok, got Err: {:?}", result.err());
     }
 
