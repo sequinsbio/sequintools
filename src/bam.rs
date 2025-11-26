@@ -385,7 +385,7 @@ pub struct MockBamWriter {
 #[cfg(any(test, feature = "test-util"))]
 impl MockBamWriter {
     /// Create a new MockBamWriter
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             records: Vec::new(),
         }
