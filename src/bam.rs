@@ -131,7 +131,7 @@ impl BamReader for HtslibBamReader {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum FetchState {
     All,
@@ -162,14 +162,14 @@ enum FetchState {
 ///     // ... test logic ...
 /// }
 /// ```
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 pub struct MockBamReader {
     records: Vec<Record>,
     header: HeaderView,
     fetch_state: FetchState,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 impl MockBamReader {
     /// Create a new MockBamReader from a vector of records
     pub fn new(
@@ -208,12 +208,12 @@ impl MockBamReader {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 pub struct MockRecords {
     records: std::vec::IntoIter<Record>,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 impl Iterator for MockRecords {
     type Item = std::result::Result<Record, rust_htslib::errors::Error>;
 
@@ -222,7 +222,7 @@ impl Iterator for MockRecords {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 impl BamReader for MockBamReader {
     type RecordsIter<'a> = MockRecords;
 
@@ -377,12 +377,12 @@ impl BamWriter for HtslibBamWriter {
 /// let written_records = writer.records();
 /// assert_eq!(written_records.len(), 1);
 /// ```
-#[cfg(test)]
-pub(crate) struct MockBamWriter {
+#[cfg(any(test, feature = "test-util"))]
+pub struct MockBamWriter {
     records: Vec<Record>,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 impl MockBamWriter {
     /// Create a new MockBamWriter
     pub(crate) fn new() -> Self {
@@ -392,24 +392,24 @@ impl MockBamWriter {
     }
 
     /// Get a reference to the written records
-    pub(crate) fn records(&self) -> &Vec<Record> {
+    pub fn records(&self) -> &Vec<Record> {
         &self.records
     }
 
     /// Clear the written records
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.records.clear();
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 impl Default for MockBamWriter {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 impl BamWriter for MockBamWriter {
     fn write(&mut self, record: &Record) -> std::result::Result<(), rust_htslib::errors::Error> {
         self.records.push(record.clone());
