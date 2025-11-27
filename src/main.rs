@@ -146,12 +146,17 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
     if let Some(reference) = args.reference.as_ref() {
         reader.set_reference(reference)?;
     }
-    let hdr = bam::Header::from_template(reader.header());
+    let mut hdr = bam::Header::from_template(reader.header());
     let format = if args.cram {
         bam::Format::Cram
     } else {
         bam::Format::Bam
     };
+
+    let vn = env!("GIT_VERSION");
+    let cl = std::env::args().collect::<Vec<String>>().join(" ");
+    let pg_record = format!("PG\tID:sequintools\tPN:sequintools\tVN:{vn}\tCL:{cl}");
+    hdr.push_record(&bam::header::HeaderRecord::new(pg_record.as_bytes()));
 
     let mut writer = if let Some(output) = &args.output {
         HtslibBamWriter::from_path(output, &hdr, format)?
