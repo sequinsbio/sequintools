@@ -23,7 +23,7 @@ fn calculate_md5_without_pg_records(bam_path: &Path) -> String {
     samtools_output.wait().expect("Samtools command failed");
     if !output.status.success() {
         panic!(
-            "grep command failed with status: {}\\nstderr: {}",
+            "grep command failed with status: {}\nstderr: {}",
             output.status,
             String::from_utf8_lossy(&output.stderr)
         );
