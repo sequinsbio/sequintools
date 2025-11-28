@@ -1,8 +1,36 @@
 use rust_htslib::bam::{self, Read};
 use std::fs;
 use std::fs::File;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use tempfile::TempDir;
+
+fn calculate_md5_without_pg_records(bam_path: &Path) -> String {
+    let mut samtools_output = Command::new("samtools")
+        .args(["view", "-h", bam_path.to_str().unwrap()])
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to execute samtools command");
+    let grep_output = Command::new("grep")
+        .args(["-v", "^@PG"])
+        .stdin(samtools_output.stdout.take().unwrap())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to execute grep command");
+    let output = &grep_output
+        .wait_with_output()
+        .expect("Failed to read grep output");
+    samtools_output.wait().expect("Samtools command failed");
+    if !output.status.success() {
+        panic!(
+            "grep command failed with status: {}\nstderr: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let digest = md5::compute(&output.stdout);
+    format!("{digest:x}")
+}
 
 #[test]
 fn test_cli_bedcov() {
@@ -15,12 +43,8 @@ variant_3,chrQ_mirror,6600,9600,0,163,116.94,39.02,0.33";
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("output.csv");
     let file = File::create(&output_path).unwrap();
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "bedcov",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
             "testdata/calibrated.bam",
@@ -43,12 +67,8 @@ variant_3,chrQ_mirror,6600,9600,0,163,116.94,39.02,0.33";
 fn test_calibrate_fixed_coverage() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.bam");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "calibrate",
             "--bed",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
@@ -65,10 +85,8 @@ fn test_calibrate_fixed_coverage() {
         "Command failed with stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let file_bytes = fs::read(&output_path).expect("Should have been able to read the file");
-    let digest = md5::compute(&file_bytes);
-    let computed_md5 = format!("{digest:x}");
-    let expected_md5 = "f7441d6fac943fcc1649af48d34ef77c";
+    let computed_md5 = calculate_md5_without_pg_records(&output_path);
+    let expected_md5 = "3c9bbf17b331d6bf1ddcc1f5725175ec";
     assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
     let mut index_path = output_path.clone();
     index_path.set_extension("bam.bai");
@@ -79,12 +97,8 @@ fn test_calibrate_fixed_coverage() {
 fn test_calibrate_sample_mean_coverage() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.bam");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "calibrate",
             "--bed",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
@@ -102,10 +116,8 @@ fn test_calibrate_sample_mean_coverage() {
         "Command failed with stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let file_bytes = fs::read(&output_path).expect("Should have been able to read the file");
-    let digest = md5::compute(&file_bytes);
-    let computed_md5 = format!("{digest:x}");
-    let expected_md5 = "c074c15845ef58ef9ade8498e88ef264";
+    let computed_md5 = calculate_md5_without_pg_records(&output_path);
+    let expected_md5 = "967f061c503316128bcccd605c435224";
     assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
 }
 
@@ -113,12 +125,8 @@ fn test_calibrate_sample_mean_coverage() {
 fn test_calibrate_sample_coverage_profile() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.bam");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "calibrate",
             "--experimental",
             "--bed",
@@ -137,10 +145,8 @@ fn test_calibrate_sample_coverage_profile() {
         "Command failed with stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let file_bytes = fs::read(&output_path).expect("Should have been able to read the file");
-    let digest = md5::compute(&file_bytes);
-    let computed_md5 = format!("{digest:x}");
-    let expected_md5 = "92b7f0546a12e187afb5795d4e654f78";
+    let computed_md5 = calculate_md5_without_pg_records(&output_path);
+    let expected_md5 = "d399ae99545464c9631ace3258e57860";
     assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
 }
 
@@ -148,11 +154,8 @@ fn test_calibrate_sample_coverage_profile() {
 fn test_calibrate_cram_input() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.bam");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
             "calibrate",
             "--bed",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
@@ -169,10 +172,8 @@ fn test_calibrate_cram_input() {
         "Command failed with stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let file_bytes = fs::read(&output_path).expect("Should have been able to read the file");
-    let digest = md5::compute(&file_bytes);
-    let computed_md5 = format!("{digest:x}");
-    let expected_md5 = "64bf98716f2bc26ab82e3b4a0be24b55";
+    let computed_md5 = calculate_md5_without_pg_records(&output_path);
+    let expected_md5 = "bae7f889aa8a1c1f7db5d10d2b2dd0ff";
     assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
 }
 
@@ -188,12 +189,8 @@ fn test_calibrate_cram_input() {
 fn test_calibrate_cram_output() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.cram");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "calibrate",
             "--bed",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
@@ -226,12 +223,8 @@ fn test_calibrate_cram_output() {
 fn test_calibrate_cram_input_output() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.cram");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "calibrate",
             "--bed",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
