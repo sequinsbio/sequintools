@@ -43,12 +43,8 @@ variant_3,chrQ_mirror,6600,9600,0,163,116.94,39.02,0.33";
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("output.csv");
     let file = File::create(&output_path).unwrap();
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "bedcov",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
             "testdata/calibrated.bam",
@@ -71,12 +67,8 @@ variant_3,chrQ_mirror,6600,9600,0,163,116.94,39.02,0.33";
 fn test_calibrate_fixed_coverage() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.bam");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "calibrate",
             "--bed",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
@@ -105,12 +97,8 @@ fn test_calibrate_fixed_coverage() {
 fn test_calibrate_sample_mean_coverage() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.bam");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "calibrate",
             "--bed",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
@@ -137,12 +125,8 @@ fn test_calibrate_sample_mean_coverage() {
 fn test_calibrate_sample_coverage_profile() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.bam");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "calibrate",
             "--experimental",
             "--bed",
@@ -170,11 +154,8 @@ fn test_calibrate_sample_coverage_profile() {
 fn test_calibrate_cram_input() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.bam");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
             "calibrate",
             "--bed",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
@@ -208,12 +189,8 @@ fn test_calibrate_cram_input() {
 fn test_calibrate_cram_output() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.cram");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "calibrate",
             "--bed",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
@@ -246,12 +223,8 @@ fn test_calibrate_cram_output() {
 fn test_calibrate_cram_input_output() {
     let temp_dir = TempDir::new().unwrap();
     let output_path = temp_dir.path().join("calibrated.cram");
-    let output = Command::new("cargo")
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
         .args([
-            "run",
-            "--bin",
-            "sequintools",
-            "--",
             "calibrate",
             "--bed",
             "testdata/resources/sequin_regions.chrQ_mirror.bed",
