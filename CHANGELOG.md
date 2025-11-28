@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0](https://github.com/sequinsbio/sequintools/compare/v0.9.3...v0.10.0) (2025-11-28)
+
+
+### Features
+
+* add test-util feature to expose test infrastructure ([#276](https://github.com/sequinsbio/sequintools/issues/276)) ([e7c34b6](https://github.com/sequinsbio/sequintools/commit/e7c34b6625287c9b0dcae85090b135fce18e2c53))
+
+
+### Bug Fixes
+
+* **deps:** bump clap from 4.5.51 to 4.5.53 ([#275](https://github.com/sequinsbio/sequintools/issues/275)) ([e4ab250](https://github.com/sequinsbio/sequintools/commit/e4ab25007514a0d550d40131fea148ce71398786))
+* **deps:** bump debian from 13.1-slim to 13.2-slim ([#274](https://github.com/sequinsbio/sequintools/issues/274)) ([ec8350c](https://github.com/sequinsbio/sequintools/commit/ec8350ccedf5018b6f5299454050c6b1adace6a9))
+
 ## [0.9.3](https://github.com/sequinsbio/sequintools/compare/v0.9.2...v0.9.3) (2025-11-18)
 
 
