@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/sequinsbio/sequintools/compare/v0.10.0...v0.11.0) (2025-12-30)
+
+
+### Features
+
+* add PG record to alignment output files ([#277](https://github.com/sequinsbio/sequintools/issues/277)) ([80e94d4](https://github.com/sequinsbio/sequintools/commit/80e94d45182d3028b63e23813907b0f3c40cc409))
+
 ## [0.10.0](https://github.com/sequinsbio/sequintools/compare/v0.9.3...v0.10.0) (2025-11-28)
 
 
