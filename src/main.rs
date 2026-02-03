@@ -427,4 +427,42 @@ mod tests {
         };
         assert_eq!(sequintools::coverage::BedcovArgs::from(input), expected);
     }
+
+    #[test]
+    fn test_trim_regions() {
+        let regions = vec![
+            region::Region {
+                contig: "chr1".to_string(),
+                name: "region1".to_string(),
+                beg: 100,
+                end: 500,
+            },
+            region::Region {
+                contig: "chr2".to_string(),
+                name: "region2".to_string(),
+                beg: 200,
+                end: 800,
+            },
+        ];
+        let flank = 50;
+        let trimmed = trim_regions(&regions, flank).unwrap();
+        assert_eq!(trimmed.len(), 2);
+        assert_eq!(trimmed[0].beg, 150);
+        assert_eq!(trimmed[0].end, 450);
+        assert_eq!(trimmed[1].beg, 250);
+        assert_eq!(trimmed[1].end, 750);
+    }
+
+    #[test]
+    fn test_trim_regions_error() {
+        let regions = vec![region::Region {
+            contig: "chr1".to_string(),
+            name: "region1".to_string(),
+            beg: 100,
+            end: 200,
+        }];
+        let flank = 150;
+        let result = trim_regions(&regions, flank);
+        assert!(result.is_err());
+    }
 }
