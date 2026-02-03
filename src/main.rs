@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use clap::{Args, Parser, Subcommand};
 use rust_htslib::bam;
 use sequintools::bam::{BamReader, BamWriter, HtslibBamReader, HtslibBamWriter};
@@ -133,6 +133,33 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Trims regions by removing flanking bases.
+///
+/// # Arguments
+/// - `regions`: Regions to clip.
+/// - `flank`: Number of bases to remove from each end.
+///
+/// # Returns
+/// A vector of clipped regions.
+fn trim_regions(regions: &[region::Region], flank: u64) -> Result<Vec<region::Region>> {
+    regions
+        .iter()
+        .map(|r| {
+            let mut new_region = r.clone();
+            new_region.beg = new_region.beg.saturating_add(flank);
+            new_region.end = new_region.end.saturating_sub(flank);
+            if new_region.beg >= new_region.end {
+                return Err(anyhow!(
+                    "Region {} start is greater than or equal to end after trimming flanks {}",
+                    r.name,
+                    flank,
+                ));
+            }
+            Ok(new_region)
+        })
+        .collect()
+}
+
 fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
     if args.cram && args.reference.is_none() {
         bail!("--cram output requires --reference to be supplied");
@@ -170,8 +197,15 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
 
     let target_regions = region::load_from_bed(&mut BufReader::new(File::open(&args.bed)?))?;
 
+    // Remove `args.flank` bases from each end of the target regions. We do this
+    // here at the start to ensure the regions always have the requested flanks
+    // removed. Passing down the `flank` value risks it being forgotten in some
+    // code paths.
+    let target_regions = trim_regions(&target_regions, args.flank)?;
+
     let sample_regions = if let Some(sample_bed) = &args.sample_bed {
         let regions = region::load_from_bed(&mut BufReader::new(File::open(sample_bed)?))?;
+        let regions = trim_regions(&regions, args.flank)?;
         Some(regions)
     } else {
         None
@@ -182,7 +216,6 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
         if let Some(sample_regions) = &sample_regions {
             CalibrationMode::SampleProfile {
                 sample_regions,
-                flank: args.flank,
                 window_size: args.window_size,
                 min_mapq: args.min_mapq,
                 seed: args.seed,
@@ -397,5 +430,43 @@ mod tests {
             bam_path: PathBuf::from("my.bam"),
         };
         assert_eq!(sequintools::coverage::BedcovArgs::from(input), expected);
+    }
+
+    #[test]
+    fn test_trim_regions() {
+        let regions = vec![
+            region::Region {
+                contig: "chr1".to_string(),
+                name: "region1".to_string(),
+                beg: 100,
+                end: 500,
+            },
+            region::Region {
+                contig: "chr2".to_string(),
+                name: "region2".to_string(),
+                beg: 200,
+                end: 800,
+            },
+        ];
+        let flank = 50;
+        let trimmed = trim_regions(&regions, flank).unwrap();
+        assert_eq!(trimmed.len(), 2);
+        assert_eq!(trimmed[0].beg, 150);
+        assert_eq!(trimmed[0].end, 450);
+        assert_eq!(trimmed[1].beg, 250);
+        assert_eq!(trimmed[1].end, 750);
+    }
+
+    #[test]
+    fn test_trim_regions_error() {
+        let regions = vec![region::Region {
+            contig: "chr1".to_string(),
+            name: "region1".to_string(),
+            beg: 100,
+            end: 200,
+        }];
+        let flank = 150;
+        let result = trim_regions(&regions, flank);
+        assert!(result.is_err());
     }
 }

@@ -86,7 +86,7 @@ fn test_calibrate_fixed_coverage() {
         String::from_utf8_lossy(&output.stderr)
     );
     let computed_md5 = calculate_md5_without_pg_records(&output_path);
-    let expected_md5 = "3c9bbf17b331d6bf1ddcc1f5725175ec";
+    let expected_md5 = "80f256833a6d3c692744ca23d65468dd";
     assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
     let mut index_path = output_path.clone();
     index_path.set_extension("bam.bai");
@@ -117,7 +117,7 @@ fn test_calibrate_sample_mean_coverage() {
         String::from_utf8_lossy(&output.stderr)
     );
     let computed_md5 = calculate_md5_without_pg_records(&output_path);
-    let expected_md5 = "967f061c503316128bcccd605c435224";
+    let expected_md5 = "e17e7665cb633623f57ff3728e16a113";
     assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
 }
 
@@ -173,7 +173,7 @@ fn test_calibrate_cram_input() {
         String::from_utf8_lossy(&output.stderr)
     );
     let computed_md5 = calculate_md5_without_pg_records(&output_path);
-    let expected_md5 = "bae7f889aa8a1c1f7db5d10d2b2dd0ff";
+    let expected_md5 = "f0f3648251cba0716b5bdcea06dea7bb";
     assert_eq!(computed_md5, expected_md5, "MD5 checksum does not match");
 }
 
@@ -213,7 +213,7 @@ fn test_calibrate_cram_output() {
     let mut reader =
         bam::Reader::from_path(&output_path).expect("Should be able to open output CRAM");
     let record_count = reader.records().count();
-    assert_eq!(record_count, 4718);
+    assert_eq!(record_count, 4356);
     let mut index_path = output_path.clone();
     index_path.set_extension("cram.crai");
     assert!(index_path.exists(), "No such file: {index_path:?}");
@@ -246,5 +246,5 @@ fn test_calibrate_cram_input_output() {
     let mut reader =
         bam::Reader::from_path(output_path).expect("Should be able to open output CRAM");
     let record_count = reader.records().count();
-    assert_eq!(record_count, 4718);
+    assert_eq!(record_count, 4356);
 }
