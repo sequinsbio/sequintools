@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use clap::{Args, Parser, Subcommand};
 use rust_htslib::bam;
 use sequintools::bam::{BamReader, BamWriter, HtslibBamReader, HtslibBamWriter};
@@ -133,6 +133,25 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+fn trim_regions(regions: &[region::Region], flank: u64) -> Result<Vec<region::Region>> {
+    regions
+        .iter()
+        .map(|r| {
+            let mut new_region = r.clone();
+            new_region.beg = new_region.beg.saturating_add(flank);
+            new_region.end = new_region.end.saturating_sub(flank);
+            if new_region.beg >= new_region.end {
+                return Err(anyhow!(
+                    "Region {} start is greater than or equal to end after trimming flanks {}",
+                    r.name,
+                    flank,
+                ));
+            }
+            Ok(new_region)
+        })
+        .collect()
+}
+
 fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
     if args.cram && args.reference.is_none() {
         bail!("--cram output requires --reference to be supplied");
@@ -174,25 +193,11 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
     // here at the start to ensure the regions always have the requested flanks
     // removed. Passing down the `flank` value risks it being forgotten in some
     // code paths.
-    let target_regions = target_regions
-        .into_iter()
-        .map(|mut r| {
-            r.beg += args.flank;
-            r.end -= args.flank;
-            r
-        })
-        .collect::<Vec<_>>();
+    let target_regions = trim_regions(&target_regions, args.flank)?;
 
     let sample_regions = if let Some(sample_bed) = &args.sample_bed {
         let regions = region::load_from_bed(&mut BufReader::new(File::open(sample_bed)?))?;
-        let regions = regions
-            .into_iter()
-            .map(|mut r| {
-                r.beg += args.flank;
-                r.end -= args.flank;
-                r
-            })
-            .collect::<Vec<_>>();
+        let regions = trim_regions(&regions, args.flank)?;
         Some(regions)
     } else {
         None
