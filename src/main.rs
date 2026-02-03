@@ -133,6 +133,14 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// Trims regions by removing flanking bases.
+///
+/// # Arguments
+/// - `regions`: Regions to clip.
+/// - `flank`: Number of bases to remove from each end.
+///
+/// # Returns
+/// A vector of clipped regions.
 fn trim_regions(regions: &[region::Region], flank: u64) -> Result<Vec<region::Region>> {
     regions
         .iter()
@@ -189,7 +197,7 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
 
     let target_regions = region::load_from_bed(&mut BufReader::new(File::open(&args.bed)?))?;
 
-    // Remove `args.flank` bases from each end of the targe regions. We do this
+    // Remove `args.flank` bases from each end of the target regions. We do this
     // here at the start to ensure the regions always have the requested flanks
     // removed. Passing down the `flank` value risks it being forgotten in some
     // code paths.
@@ -206,12 +214,8 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
     // Determine the calibration mode based on the provided arguments
     let mode = if args.experimental {
         if let Some(sample_regions) = &sample_regions {
-            // Setting flank to 0 because we have already removed the flanks from each region.
-            // TODO: check this code path for places where we also try to remove flanks. This is
-            // code that can be eliminated.
             CalibrationMode::SampleProfile {
                 sample_regions,
-                flank: 0,
                 window_size: args.window_size,
                 min_mapq: args.min_mapq,
                 seed: args.seed,

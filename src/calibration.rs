@@ -48,7 +48,6 @@ pub enum CalibrationMode<'a> {
     /// - `seed`: Random seed for reproducible downsampling.
     SampleProfile {
         sample_regions: &'a [Region],
-        flank: u64,
         window_size: u64,
         min_mapq: u8,
         seed: u64,
@@ -134,13 +133,11 @@ where
         }
         CalibrationMode::SampleProfile {
             sample_regions,
-            flank,
             window_size,
             min_mapq,
             seed,
         } => {
             let args = SampleProfileParams {
-                flank,
                 window_size,
                 min_mapq,
                 seed,
@@ -357,8 +354,6 @@ fn subsample(
 
 /// Parameters for sample profile calibration.
 struct SampleProfileParams {
-    /// Number of bases to flank regions.
-    flank: u64,
     /// Size of windows for profile matching.
     window_size: u64,
     /// Minimum mapping quality.
@@ -408,9 +403,6 @@ where
         })
         .collect::<Result<_>>()?;
 
-    let target_regions = clip_regions(target_regions, args.flank);
-    let sample_regions = clip_regions(sample_regions, args.flank);
-
     let sample_region_map = sample_regions
         .iter()
         .map(|r| (r.name.clone(), r))
@@ -424,7 +416,7 @@ where
         calibrate_regions(
             reader,
             writer,
-            &target_regions,
+            target_regions,
             &sample_region_map,
             args.window_size,
             args.min_mapq,
@@ -432,26 +424,6 @@ where
         )?;
     }
     Ok(())
-}
-
-/// Clips regions by removing flanking bases.
-///
-/// # Arguments
-/// - `regions`: Regions to clip.
-/// - `flank`: Number of bases to remove from each end.
-///
-/// # Returns
-/// A vector of clipped regions.
-fn clip_regions(regions: &[Region], flank: u64) -> Vec<Region> {
-    regions
-        .iter()
-        .map(|r| Region {
-            contig: r.contig.clone(),
-            beg: r.beg + flank,
-            end: r.end - flank,
-            name: r.name.clone(),
-        })
-        .collect()
 }
 
 /// Calibrates individual regions by matching sample profiles.
@@ -812,7 +784,6 @@ mod tests {
         let sample_regions = vec![Region::new("chr1", 100, 200, "region1")];
         let mode = CalibrationMode::SampleProfile {
             sample_regions: &sample_regions,
-            flank: 50,
             window_size: 10,
             min_mapq: 20,
             seed: 42,
@@ -999,32 +970,6 @@ mod tests {
     }
 
     #[test]
-    fn test_clip_regions() {
-        let regions = vec![
-            Region::new("chrQ_mirror", 100, 900, "region1"),
-            Region::new("chr2", 200, 800, "region2"),
-        ];
-
-        let clipped = clip_regions(&regions, 50);
-
-        assert_eq!(clipped.len(), 2);
-        assert_eq!(clipped[0].beg, 150);
-        assert_eq!(clipped[0].end, 850);
-        assert_eq!(clipped[1].beg, 250);
-        assert_eq!(clipped[1].end, 750);
-    }
-
-    #[test]
-    fn test_clip_regions_zero_flank() {
-        let regions = vec![Region::new("chrQ_mirror", 100, 900, "region1")];
-
-        let clipped = clip_regions(&regions, 0);
-
-        assert_eq!(clipped[0].beg, 100);
-        assert_eq!(clipped[0].end, 900);
-    }
-
-    #[test]
     fn test_window_starts() {
         let records = vec![
             create_mock_record(0, 100, "read1"),
@@ -1181,7 +1126,6 @@ mod tests {
         let target_regions = vec![Region::new("chrQ_mirror", 100, 200, "region1")];
         let sample_regions = vec![Region::new("chr1", 100, 200, "region1")];
         let params = SampleProfileParams {
-            flank: 50,
             window_size: 100,
             min_mapq: 20,
             seed: 42,
