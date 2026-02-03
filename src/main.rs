@@ -170,8 +170,29 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
 
     let target_regions = region::load_from_bed(&mut BufReader::new(File::open(&args.bed)?))?;
 
+    // Remove `args.flank` bases from each end of the targe regions. We do this
+    // here at the start to ensure the regions always have the requested flanks
+    // removed. Passing down the `flank` value risks it being forgotten in some
+    // code paths.
+    let target_regions = target_regions
+        .into_iter()
+        .map(|mut r| {
+            r.beg += args.flank;
+            r.end -= args.flank;
+            r
+        })
+        .collect::<Vec<_>>();
+
     let sample_regions = if let Some(sample_bed) = &args.sample_bed {
         let regions = region::load_from_bed(&mut BufReader::new(File::open(sample_bed)?))?;
+        let regions = regions
+            .into_iter()
+            .map(|mut r| {
+                r.beg += args.flank;
+                r.end -= args.flank;
+                r
+            })
+            .collect::<Vec<_>>();
         Some(regions)
     } else {
         None
@@ -180,9 +201,12 @@ fn run_calibrate(args: &CalibrateArgs) -> Result<()> {
     // Determine the calibration mode based on the provided arguments
     let mode = if args.experimental {
         if let Some(sample_regions) = &sample_regions {
+            // Setting flank to 0 because we have already removed the flanks from each region.
+            // TODO: check this code path for places where we also try to remove flanks. This is
+            // code that can be eliminated.
             CalibrationMode::SampleProfile {
                 sample_regions,
-                flank: args.flank,
+                flank: 0,
                 window_size: args.window_size,
                 min_mapq: args.min_mapq,
                 seed: args.seed,
