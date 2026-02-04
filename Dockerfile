@@ -1,30 +1,35 @@
-# Use multi-stage builds to reduce the size of the final image
-# https://docs.docker.com/build/building/multi-stage/#use-multi-stage-builds
+# lukemathwalker/cargo-chef:0.1.73-rust-1.93.0
+FROM lukemathwalker/cargo-chef@sha256:52a4725a5c12343fb67c069bd95d740a532c6c1b771a8834dca8d8db9337366c AS chef
+WORKDIR /app
 
-# Stage 1: Build the rust app
-FROM mcr.microsoft.com/devcontainers/rust:2-1-bookworm AS builder
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  cmake=3.25.1-1 \
-  clang=1:14.0-55.7~deb12u1 \
-  && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /usr/sequins
-
-# Accept version string from build context (fallback handled in build.rs)
-ARG SEQUINTOOLS_GIT_VERSION
-ENV SEQUINTOOLS_GIT_VERSION=${SEQUINTOOLS_GIT_VERSION}
-
-# Copy the Cargo.toml and Cargo.lock files first
+FROM chef AS planner
 COPY ./Cargo.toml ./Cargo.toml
 COPY ./Cargo.lock ./Cargo.lock
 COPY ./build.rs ./build.rs
 COPY ./src ./src
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Build with locked deps; build.rs will embed version using SEQUINTOOLS_GIT_VERSION if provided
+# Build the rust app
+FROM chef AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  cmake=3.31.6-2 \
+  clang=1:19.0-63 \
+  && rm -rf /var/lib/apt/lists/*
+COPY --from=planner /app/recipe.json recipe.json
+# Accept version string from build context (fallback handled in build.rs)
+ARG SEQUINTOOLS_GIT_VERSION
+ENV SEQUINTOOLS_GIT_VERSION=${SEQUINTOOLS_GIT_VERSION}
+
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY ./Cargo.toml ./Cargo.toml
+COPY ./Cargo.lock ./Cargo.lock
+COPY ./build.rs ./build.rs
+COPY ./src ./src
+# Build with locked deps; build.rs will embed version using
+# SEQUINTOOLS_GIT_VERSION if provided
 RUN cargo build --locked --release
 
-# Stage 2: Create final Docker image with debian-slim.
+# Create final Docker image with debian-slim.
 FROM debian:13.3-slim
 
 # Augment debian-slim with tools needed to run in nextflow
@@ -37,6 +42,6 @@ RUN apt-get update && \
   rm -rf /var/lib/apt/lists/*
 
 # Copy app and test data.
-COPY --from=builder /usr/sequins/target/release/sequintools /usr/local/bin/sequintools
+COPY --from=builder /app/target/release/sequintools /usr/local/bin/sequintools
 
-CMD [ "sequintools" ]
+CMD [ "/usr/local/bin/sequintools" ]
