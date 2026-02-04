@@ -1,8 +1,11 @@
-FROM lukemathwalker/cargo-chef:0.1.73-rust-1.93 AS chef
+FROM lukemathwalker/cargo-chef:0.1.73-rust-1.93.0 AS chef
 WORKDIR /app
 
 FROM chef AS planner
-COPY . .
+COPY ./Cargo.toml ./Cargo.toml
+COPY ./Cargo.lock ./Cargo.lock
+COPY ./build.rs ./build.rs
+COPY ./src ./src
 RUN cargo chef prepare --recipe-path recipe.json
 
 # Build the rust app
@@ -17,7 +20,10 @@ ARG SEQUINTOOLS_GIT_VERSION
 ENV SEQUINTOOLS_GIT_VERSION=${SEQUINTOOLS_GIT_VERSION}
 
 RUN cargo chef cook --release --recipe-path recipe.json
-COPY . .
+COPY ./Cargo.toml ./Cargo.toml
+COPY ./Cargo.lock ./Cargo.lock
+COPY ./build.rs ./build.rs
+COPY ./src ./src
 # Build with locked deps; build.rs will embed version using
 # SEQUINTOOLS_GIT_VERSION if provided
 RUN cargo build --locked --release
