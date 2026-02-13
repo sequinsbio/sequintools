@@ -12,7 +12,7 @@ use crate::coverage;
 use crate::errors::{Error, Result};
 use crate::region::Region;
 use rand::seq::IteratorRandom;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand_pcg::Pcg32;
 use rust_htslib::bam::{FetchDefinition, Record};
 use std::collections::HashMap;
@@ -619,7 +619,7 @@ fn records_that_start_in_region<R: BamReader>(
 /// A `Result` containing the selected indices.
 fn choose_from(size: u64, n: u64, seed: u64) -> Vec<u64> {
     let mut rng = Pcg32::seed_from_u64(seed);
-    (0..size).choose_multiple(&mut rng, n as usize)
+    (0..size).sample(&mut rng, n as usize)
 }
 
 #[cfg(test)]
