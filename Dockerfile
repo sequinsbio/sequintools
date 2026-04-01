@@ -30,7 +30,7 @@ COPY ./src ./src
 RUN cargo build --locked --release
 
 # Create final Docker image with debian-slim.
-FROM debian:13.3-slim
+FROM debian:13.4-slim
 
 # Augment debian-slim with tools needed to run in nextflow
 RUN apt-get update && \
