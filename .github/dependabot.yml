@@ -8,6 +8,8 @@ updates:
       prefix: "chore"
       prefix-development: "chore"
       include: "scope"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "docker"
     directory: "/"
@@ -17,3 +19,5 @@ updates:
       prefix: "chore"
       prefix-development: "chore"
       include: "scope"
+    cooldown:
+      default-days: 7
