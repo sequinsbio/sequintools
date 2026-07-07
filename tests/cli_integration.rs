@@ -248,3 +248,34 @@ fn test_calibrate_cram_input_output() {
     let record_count = reader.records().count();
     assert_eq!(record_count, 4356);
 }
+
+#[test]
+fn test_calibrate_ignores_summary_report_option() {
+    let temp_dir = TempDir::new().unwrap();
+    let output_path = temp_dir.path().join("calibrated.bam");
+    let summary_path = temp_dir.path().join("calibrate.summary.csv");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_sequintools"))
+        .args([
+            "calibrate",
+            "--bed",
+            "testdata/resources/sequin_regions.chrQ_mirror.bed",
+            "--summary-report",
+            summary_path.to_str().unwrap(),
+            "-o",
+            output_path.to_str().unwrap(),
+            "testdata/uncalibrated.bam",
+        ])
+        .output()
+        .expect("Failed to execute command");
+
+    assert!(
+        output.status.success(),
+        "Command failed with stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains(
+        "Warning: --summary-report is deprecated and ignored. Use the bedcov command for coverage information."
+    ));
+    assert!(!summary_path.exists());
+}
