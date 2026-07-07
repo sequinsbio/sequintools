@@ -18,7 +18,7 @@ clap = { version = "4.6.0", features = ["derive"] }
 rand = "0.10.1"
 rand_pcg = "0.10.1"
 rust-htslib = "1.0.0"
-anyhow = "1.0.102"
+anyhow = "1.0.103"
 csv = "1.4.0"
 thiserror = "2.0.18"
 rayon = "1.11.0"
