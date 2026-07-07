@@ -132,9 +132,9 @@ fn main() -> Result<()> {
                     "Warning: --summary-report is deprecated and ignored. \
                     Use the bedcov command for coverage information."
                 );
-            }        
+            }
             run_calibrate(&args)?
-        },
+        }
         Commands::Bedcov(args) => sequintools::coverage::run(&args.into())?,
     };
     Ok(())
