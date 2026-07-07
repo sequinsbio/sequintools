@@ -124,20 +124,6 @@ sequintools calibrate \
     example/example.bam
 ```
 
-You can also create a summary file with before and after coverage using the
-`--summary-report` option:
-
-```sh
-sequintools calibrate \
-    -b example/resources/sequin_regions.chrQ_mirror.bed \
-    -H example/resources/sequin_regions.hg38.bed \
-    -o calibrated.bam \
-    --summary-report calibrate.summary.csv \
-    --write-index \
-    --exclude-uncalibrated-reads \
-    example/example.bam
-```
-
 ### `bedcov`
 
 The `bedcov` command collects statistics from a BAM file for regions in a BED
