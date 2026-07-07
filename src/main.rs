@@ -53,10 +53,9 @@ pub struct CalibrateArgs {
     #[arg(short, long)]
     bed: PathBuf,
 
-    /// File to write summary report (CSV). Will contain uncalibrated, target
-    /// and calibrated mean coverage of each sequin region. Only created when
-    /// `--sample-bed` is provided.
-    #[arg(long)]
+    // Kept temporarily so older commands that still pass --summary-report do not fail.
+    // The summary report output is no longer implemented.
+    #[arg(long, hide = true)]
     summary_report: Option<PathBuf>,
 
     /// Change to experimental sample profile matching - unsuitable for
@@ -127,7 +126,15 @@ impl From<BedcovArgs> for sequintools::coverage::BedcovArgs {
 fn main() -> Result<()> {
     let args = App::parse();
     match args.command {
-        Commands::Calibrate(args) => run_calibrate(&args)?,
+        Commands::Calibrate(args) => {
+            if args.summary_report.is_some() {
+                eprintln!(
+                    "Warning: --summary-report is deprecated and ignored. \
+                    Use the bedcov command for coverage information."
+                );
+            }
+            run_calibrate(&args)?
+        }
         Commands::Bedcov(args) => sequintools::coverage::run(&args.into())?,
     };
     Ok(())
