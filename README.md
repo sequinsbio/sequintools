@@ -75,13 +75,13 @@ and familiarise yourself with the input file requirements.
 
 ### `calibrate`
 
-`calibrate` downsamples Sequin reads so that they more closely match the sample
+`calibrate` downsamples Sequins reads so that they more closely match the sample
 data. The more closely the Sequins data resembles the sample data it controls
 for, the better the control will be.
 
-The simplest form of calibration is to adjust the mean coverage for all Sequin
-regions to a standard coverage. In this example, the mean coverage for each
-Sequin in the data set is set to 40X.
+The simplest form of calibration is to adjust the mean coverage for all Sequins
+regions to a flat target coverage. In this example, the mean coverage for each
+Sequins molecule in the data set is set to 40X.
 
 ```sh
 sequintools calibrate \
@@ -93,10 +93,10 @@ sequintools calibrate \
 ```
 
 Alternatively, you can use the sample data in the same BAM file to adjust the
-Sequin coverage to more closely represent the coverage of the controlled
+Sequins coverage to more closely represent the coverage of the controlled
 region. This method uses the mean depth of the region in the sample data that
-corresponds to each Sequin rather than a fixed coverage for all Sequin regions.
-To do this, you need to provide two BED files: one containing the Sequin regions
+corresponds to each Sequins molecule rather than a fixed coverage for all Sequins regions.
+To do this, you need to provide two BED files: one containing the Sequins regions
 on the decoy chromosome and the other containing the reference genome locations
 they control for. The name column (4th column) must match between the two BED
 files.
@@ -111,7 +111,7 @@ sequintools calibrate \
 ```
 
 Make the same adjustments as the previous command, but exclude the sample data
-so that the output BAM only has calibrated Sequin data (this is much faster than
+so that the output BAM only has calibrated Sequins data (this is much faster than
 the previous command).
 
 ```sh
@@ -123,6 +123,13 @@ sequintools calibrate \
     --exclude-uncalibrated-reads \
     example/example.bam
 ```
+
+> [!NOTE]
+> In samples with high mitochondrial DNA copy number, native `chrM` coverage may exceed the coverage of the corresponding mitochondrial Sequins (`SG_000000038`–`SG_000000041`) for the **WGS Core Control Set** product. Because `calibrate` can only downsample Sequins reads, sample-matched calibration will stop if the required target coverage is higher than the available Sequins coverage.
+>
+> This does not necessarily indicate poor mitochondrial Sequins recovery or mapping. To calibrate the remaining regions, remove the mitochondrial Sequins from the decoy BED file. If required, mitochondrial Sequins reads can be extracted before calibration and merged back into the calibrated BAM or CRAM afterwards.
+>
+> The same error for a nuclear region is more likely to indicate an input or workflow issue, as nuclear Sequins coverage is expected to exceed that of the corresponding native region.
 
 ### `bedcov`
 
