@@ -125,7 +125,7 @@ sequintools calibrate \
 ```
 
 > [!NOTE]
-> In samples with high mitochondrial DNA copy number, native `chrM` coverage may exceed the coverage of the corresponding mitochondrial Sequins (`SG_000000038`–`SG_000000041`). Because `calibrate` can only downsample Sequins reads, sample-matched calibration will stop if the required target coverage is higher than the available Sequins coverage.
+> In samples with high mitochondrial DNA copy number, native `chrM` coverage may exceed the coverage of the corresponding mitochondrial Sequins (`SG_000000038`–`SG_000000041`) for the **WGS Core Control Set** product. Because `calibrate` can only downsample Sequins reads, sample-matched calibration will stop if the required target coverage is higher than the available Sequins coverage.
 >
 > This does not necessarily indicate poor mitochondrial Sequins recovery or mapping. To calibrate the remaining regions, remove the mitochondrial Sequins from the decoy BED file. If required, mitochondrial Sequins reads can be extracted before calibration and merged back into the calibrated BAM or CRAM afterwards.
 >
